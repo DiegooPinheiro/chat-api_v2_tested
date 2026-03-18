@@ -7,6 +7,34 @@ const generateToken = (id) => {
   });
 };
 
+// @desc    Listar usuários (busca simples)
+// @route   GET /api/users?q=
+// @access  Private
+const listUsers = async (req, res) => {
+  const q = (req.query.q || '').toString().trim();
+  const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
+
+  try {
+    const filter = { _id: { $ne: req.user._id } };
+
+    if (q) {
+      filter.$or = [
+        { username: { $regex: q, $options: 'i' } },
+        { nome: { $regex: q, $options: 'i' } }
+      ];
+    }
+
+    const users = await User.find(filter)
+      .select('_id username nome foto')
+      .sort({ nome: 1 })
+      .limit(limit);
+
+    res.status(200).json(users);
+  } catch (error) {
+    res.status(500).json({ message: error.message });
+  }
+};
+
 // @desc    Registrar novo usuário
 // @route   POST /api/users
 // @access  Public
@@ -87,6 +115,7 @@ const getUserProfile = async (req, res) => {
 };
 
 module.exports = {
+  listUsers,
   registerUser,
   authUser,
   getUserProfile
