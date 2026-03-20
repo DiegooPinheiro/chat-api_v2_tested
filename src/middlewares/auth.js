@@ -4,6 +4,10 @@ const User = require('../models/User');
 const protect = async (req, res, next) => {
   let token;
 
+  if (!process.env.JWT_SECRET) {
+    return res.status(500).json({ message: 'JWT_SECRET não configurado no servidor' });
+  }
+
   if (
     req.headers.authorization &&
     req.headers.authorization.startsWith('Bearer')
@@ -25,12 +29,12 @@ const protect = async (req, res, next) => {
       next();
     } catch (error) {
       console.error(error);
-      res.status(401).json({ message: 'Não autorizado, token falhou' });
+      return res.status(401).json({ message: 'Não autorizado, token falhou' });
     }
   }
 
   if (!token) {
-    res.status(401).json({ message: 'Não autorizado, sem token' });
+    return res.status(401).json({ message: 'Não autorizado, sem token' });
   }
 };
 

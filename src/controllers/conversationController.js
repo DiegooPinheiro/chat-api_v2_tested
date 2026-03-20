@@ -1,5 +1,6 @@
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
+const Message = require('../models/Message');
 
 // @desc    Criar nova conversa
 // @route   POST /api/conversations
@@ -62,7 +63,37 @@ const getUserConversations = async (req, res) => {
   }
 };
 
+// @desc    Excluir conversa (e mensagens)
+// @route   DELETE /api/conversations/:conversationId
+// @access  Private
+const deleteConversation = async (req, res) => {
+  const { conversationId } = req.params;
+  const userId = req.user._id;
+
+  try {
+    const conversation = await Conversation.findById(conversationId);
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversa não encontrada' });
+    }
+
+    if (!conversation.participants.includes(userId)) {
+      return res.status(403).json({ message: 'Acesso negado: Você não faz parte desta conversa' });
+    }
+
+    const messagesResult = await Message.deleteMany({ conversationId: conversation._id });
+    await Conversation.deleteOne({ _id: conversation._id });
+
+    return res.status(200).json({
+      message: 'Conversa excluída com sucesso',
+      deletedMessages: messagesResult?.deletedCount ?? 0,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createConversation,
-  getUserConversations
+  getUserConversations,
+  deleteConversation
 };

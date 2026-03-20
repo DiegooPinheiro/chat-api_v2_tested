@@ -39,9 +39,10 @@ const sendMessage = async (req, res) => {
     const savedMessage = await newMessage.save();
 
     // Atualizar a última mensagem da conversa
+    const lastText = text ? String(text) : mediaUrl ? '📎 Mídia' : '';
     await Conversation.findByIdAndUpdate(conversationId, {
       lastMessage: {
-        text,
+        text: lastText,
         senderId,
         createdAt: savedMessage.createdAt
       }

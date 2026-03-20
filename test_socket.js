@@ -6,6 +6,7 @@ const mongoose = require('mongoose');
 
 // Configuração para teste local
 const TEST_DB_URI = process.env.MONGODB_URI || 'mongodb://localhost:27017/chat_test';
+process.env.DEBUG_SOCKET = '1';
 
 async function runSocketTests() {
   console.log('--- Iniciando Testes de WebSocket (MOCKED DB) ---');
@@ -45,12 +46,25 @@ async function runSocketTests() {
     const userBId = '60c72b2f9b1e8b001c8e4d1b';
     const conversationId = '60c72b2f9b1e8b001c8e4d1c';
 
-    const clientA = io(SOCKET_URL);
-    const clientB = io(SOCKET_URL);
+    // Mockar Conversation.findById (necessário para validação no socket)
+    Conversation.findById = (id) => Promise.resolve({
+      _id: id,
+      participants: [userAId, userBId].map((v) => new mongoose.Types.ObjectId(v)),
+    });
 
-    // 3. Testar Evento de Conexão (connect_user)
-    clientA.emit('connect_user', userAId);
-    clientB.emit('connect_user', userBId);
+    const clientA = io(SOCKET_URL, { transports: ['websocket'] });
+    const clientB = io(SOCKET_URL, { transports: ['websocket'] });
+
+    // 3. Testar Evento de Conexão (connect_user) após conectar
+    await Promise.all([
+      new Promise((resolve) => clientA.on('connect', resolve)),
+      new Promise((resolve) => clientB.on('connect', resolve)),
+    ]);
+
+    await Promise.all([
+      new Promise((resolve) => clientA.emit('connect_user', userAId, resolve)),
+      new Promise((resolve) => clientB.emit('connect_user', userBId, resolve)),
+    ]);
     console.log('[Teste 1] Usuários conectados ao WebSocket.');
 
     // 4. Testar Envio e Recebimento de Mensagem em Tempo Real
@@ -58,7 +72,6 @@ async function runSocketTests() {
     
     const messageData = {
       conversationId,
-      senderId: userAId,
       text: 'Olá Usuário B! Esta mensagem foi enviada via WebSocket.',
       receiverId: userBId
     };
@@ -73,6 +86,11 @@ async function runSocketTests() {
       server.close();
       console.log('\n--- Todos os Testes de WebSocket passaram com sucesso! ---');
       process.exit(0);
+    });
+
+    clientA.on('receive_message', (msg) => {
+      console.log('ℹ️ Usuário A recebeu confirmação via WebSocket:');
+      console.log('Conteúdo da mensagem:', msg.text);
     });
 
     // Enviar a mensagem após um pequeno delay para garantir que B esteja ouvindo
