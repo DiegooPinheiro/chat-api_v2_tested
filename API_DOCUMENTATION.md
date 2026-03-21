@@ -482,6 +482,62 @@ Exemplo de teste simples:
 node -e "require('./src/controllers/messageController'); require('./src/sockets/chatSocket'); require('./src/app'); console.log('ok')"
 ```
 
+## 11. Deploy no Render
+
+Para o deploy funcionar corretamente no Render, configure as variaveis de ambiente do servico.
+
+### 11.1. Variaveis obrigatorias
+
+- `PORT`
+- `MONGO_URI`
+- `FIREBASE_PROJECT_ID`
+- `FIREBASE_CLIENT_EMAIL`
+- `FIREBASE_PRIVATE_KEY`
+
+Exemplo:
+
+```env
+PORT=3000
+MONGO_URI=mongodb+srv://usuario:senha@cluster.mongodb.net/chat
+FIREBASE_PROJECT_ID=telegram-clone-32b5c
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@telegram-clone-32b5c.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nSUA_CHAVE_AQUI\n-----END PRIVATE KEY-----\n"
+```
+
+### 11.2. Variaveis opcionais
+
+- `CORS_ORIGIN`
+- `SOCKET_POPULATE`
+- `DEBUG_SOCKET`
+
+### 11.3. Onde configurar no Render
+
+No painel do Render:
+
+1. Abra o Web Service da API
+2. Entre em `Environment`
+3. Adicione cada variavel em `Environment Variables`
+4. Salve as alteracoes
+5. Rode um novo deploy
+
+### 11.4. Observacoes importantes
+
+- `FIREBASE_PRIVATE_KEY` deve ficar com `\n` escapado dentro da string
+- nunca coloque essas credenciais no app mobile
+- essas credenciais sao apenas do backend
+- mantenha `.env` fora do Git
+- se usar `pnpm`, mantenha o `pnpm-lock.yaml` sincronizado para evitar falha com `--frozen-lockfile`
+
+### 11.5. Checklist rapido de producao
+
+- Firebase Admin configurado
+- MongoDB acessivel pelo Render
+- CORS apontando para o frontend correto
+- rota `POST /api/auth/firebase` funcionando
+- socket autenticando com token Firebase
+- evento `messages_read` chegando no cliente
+- deploy mais recente com lockfile atualizado
+
 ---
 
 Atualizado em 21 de marco de 2026.
