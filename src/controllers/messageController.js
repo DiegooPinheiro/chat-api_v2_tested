@@ -21,6 +21,26 @@ const ensureConversationAccess = async (conversationId, userId) => {
   return { conversation };
 };
 
+const syncConversationLastMessage = async (conversationId) => {
+  const latestMessage = await Message.findOne({ conversationId })
+    .sort({ createdAt: -1 })
+    .select('text mediaUrl senderId createdAt');
+
+  const nextLastMessage = latestMessage
+    ? {
+        text: latestMessage.text ? String(latestMessage.text) : latestMessage.mediaUrl ? 'Midia' : '',
+        senderId: latestMessage.senderId,
+        createdAt: latestMessage.createdAt,
+      }
+    : null;
+
+  await Conversation.findByIdAndUpdate(conversationId, {
+    lastMessage: nextLastMessage,
+  });
+
+  return nextLastMessage;
+};
+
 const markConversationAsRead = async (conversationId, readerId) => {
   const unreadMessages = await Message.find({
     conversationId,
@@ -144,9 +164,109 @@ const markMessagesAsRead = async (req, res) => {
   }
 };
 
+const deleteMessage = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
+  const { messageId } = req.params;
+  const userId = req.user._id;
+  const deleteForEveryone = req.query.deleteForEveryone === 'true' || req.body?.deleteForEveryone === true;
+
+  try {
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: 'Mensagem nao encontrada' });
+    }
+
+    const { error, conversation } = await ensureConversationAccess(message.conversationId, userId);
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    await Message.deleteOne({ _id: message._id });
+    const lastMessage = await syncConversationLastMessage(message.conversationId);
+
+    const participants = (conversation?.participants || []).map((participant) => String(participant));
+    const payload = {
+      conversationId: String(message.conversationId),
+      messageIds: [String(message._id)],
+      deletedBy: String(userId),
+      deleteForEveryone,
+      lastMessage,
+    };
+
+    participants.forEach((participantId) => {
+      emitToUserRoom(participantId, 'messages_deleted', payload);
+    });
+
+    return res.status(200).json({
+      message: 'Mensagem apagada com sucesso',
+      ...payload,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const deleteManyMessages = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
+  const { messageIds, deleteForEveryone = false } = req.body || {};
+  const userId = req.user._id;
+
+  try {
+    if (!Array.isArray(messageIds) || !messageIds.length) {
+      return res.status(400).json({ message: 'messageIds deve ser um array com pelo menos um item' });
+    }
+
+    const messages = await Message.find({ _id: { $in: messageIds } });
+    if (!messages.length) {
+      return res.status(404).json({ message: 'Nenhuma mensagem encontrada para apagar' });
+    }
+
+    const conversationIds = Array.from(new Set(messages.map((message) => String(message.conversationId))));
+    if (conversationIds.length !== 1) {
+      return res.status(400).json({ message: 'As mensagens devem pertencer a uma unica conversa' });
+    }
+
+    const conversationId = conversationIds[0];
+    const { error, conversation } = await ensureConversationAccess(conversationId, userId);
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    const normalizedIds = messages.map((message) => String(message._id));
+    await Message.deleteMany({ _id: { $in: normalizedIds } });
+    const lastMessage = await syncConversationLastMessage(conversationId);
+
+    const participants = (conversation?.participants || []).map((participant) => String(participant));
+    const payload = {
+      conversationId,
+      messageIds: normalizedIds,
+      deletedBy: String(userId),
+      deleteForEveryone: deleteForEveryone === true,
+      lastMessage,
+    };
+
+    participants.forEach((participantId) => {
+      emitToUserRoom(participantId, 'messages_deleted', payload);
+    });
+
+    return res.status(200).json({
+      message: 'Mensagens apagadas com sucesso',
+      deletedCount: normalizedIds.length,
+      ...payload,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   sendMessage,
   getMessages,
   markMessagesAsRead,
   markConversationAsRead,
+  deleteMessage,
+  deleteManyMessages,
+  syncConversationLastMessage,
 };
