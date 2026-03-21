@@ -276,6 +276,70 @@ Resposta:
 }
 ```
 
+#### `DELETE /api/messages/:messageId`
+
+Apaga uma mensagem especifica e recalcula o `lastMessage` da conversa.
+
+Query/body opcional:
+
+- `deleteForEveryone`: boolean
+
+Resposta:
+
+```json
+{
+  "message": "Mensagem apagada com sucesso",
+  "conversationId": "65f1234567890abcdef5555",
+  "messageIds": [
+    "65f1234567890abcdef7777"
+  ],
+  "deletedBy": "65f1234567890abcdef1111",
+  "deleteForEveryone": true,
+  "lastMessage": {
+    "text": "Mensagem anterior",
+    "senderId": "65f1234567890abcdef2222",
+    "createdAt": "2026-03-21T21:00:00.000Z"
+  }
+}
+```
+
+#### `POST /api/messages/delete-many`
+
+Apaga varias mensagens de uma unica conversa.
+
+Corpo:
+
+```json
+{
+  "messageIds": [
+    "65f1234567890abcdef7777",
+    "65f1234567890abcdef8888"
+  ],
+  "deleteForEveryone": true
+}
+```
+
+Resposta:
+
+```json
+{
+  "message": "Mensagens apagadas com sucesso",
+  "deletedCount": 2,
+  "conversationId": "65f1234567890abcdef5555",
+  "messageIds": [
+    "65f1234567890abcdef7777",
+    "65f1234567890abcdef8888"
+  ],
+  "deletedBy": "65f1234567890abcdef1111",
+  "deleteForEveryone": true,
+  "lastMessage": {
+    "text": "Mensagem anterior",
+    "senderId": "65f1234567890abcdef2222",
+    "createdAt": "2026-03-21T21:00:00.000Z"
+  }
+}
+```
+
 ### 5.5. Media
 
 #### `POST /api/media/upload`
@@ -364,6 +428,10 @@ Payload:
 }
 ```
 
+### 6.2.1. Observacao sobre remocao
+
+Atualmente a API remove a mensagem do banco de forma real. O campo `deleteForEveryone` ja e aceito para compatibilidade com o app, mas como o backend ainda nao possui um modelo separado de "apagar so para mim", a remocao efetiva continua apagando a mensagem da conversa persistida.
+
 Ack de sucesso:
 
 ```json
@@ -421,6 +489,29 @@ Payload:
 }
 ```
 
+#### `messages_deleted`
+
+Emitido para os participantes quando uma ou mais mensagens sao apagadas.
+
+Payload:
+
+```json
+{
+  "conversationId": "65f1234567890abcdef5555",
+  "messageIds": [
+    "65f1234567890abcdef7777",
+    "65f1234567890abcdef8888"
+  ],
+  "deletedBy": "65f1234567890abcdef1111",
+  "deleteForEveryone": true,
+  "lastMessage": {
+    "text": "Mensagem anterior",
+    "senderId": "65f1234567890abcdef2222",
+    "createdAt": "2026-03-21T21:00:00.000Z"
+  }
+}
+```
+
 #### `typing`
 
 #### `stop_typing`
@@ -456,6 +547,15 @@ Importante:
 7. API marca as mensagens como `read: true`.
 8. API emite `messages_read` para A.
 9. App de A muda o status visual para lido.
+
+Fluxo de apagado:
+
+1. Usuario seleciona uma ou mais mensagens no app.
+2. Cliente chama `POST /api/messages/delete-many`.
+3. API apaga as mensagens no MongoDB.
+4. API recalcula o `lastMessage` da conversa.
+5. API emite `messages_deleted` para os participantes.
+6. Os clientes removem as mensagens da UI e atualizam a lista de conversas.
 
 ## 9. Observacoes de seguranca
 
@@ -536,6 +636,8 @@ No painel do Render:
 - rota `POST /api/auth/firebase` funcionando
 - socket autenticando com token Firebase
 - evento `messages_read` chegando no cliente
+- endpoint de delecao de mensagens respondendo
+- evento `messages_deleted` chegando no cliente
 - deploy mais recente com lockfile atualizado
 
 ---
