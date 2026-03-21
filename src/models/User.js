@@ -2,43 +2,48 @@ const mongoose = require('mongoose');
 const bcrypt = require('bcryptjs');
 
 const userSchema = new mongoose.Schema({
+  firebaseUid: {
+    type: String,
+    unique: true,
+    sparse: true,
+    trim: true,
+  },
   username: {
     type: String,
-    required: [true, 'Username é obrigatório'],
+    required: [true, 'Username e obrigatorio'],
     unique: true,
     trim: true,
-    lowercase: true
+    lowercase: true,
   },
   nome: {
     type: String,
-    required: [true, 'Nome é obrigatório']
+    required: [true, 'Nome e obrigatorio'],
   },
   password: {
     type: String,
-    required: [true, 'Senha é obrigatória'],
     minlength: 6,
-    select: false
+    select: false,
   },
   foto: {
     type: String,
-    default: ''
-  }
+    default: '',
+  },
 }, {
   timestamps: true,
   toJSON: { virtuals: true },
-  toObject: { virtuals: true }
+  toObject: { virtuals: true },
 });
 
-// Criptografar senha antes de salvar
 userSchema.pre('save', async function(next) {
-  if (!this.isModified('password')) return next();
+  if (!this.password || !this.isModified('password')) return next();
   const salt = await bcrypt.genSalt(10);
   this.password = await bcrypt.hash(this.password, salt);
+  return next();
 });
 
-// Método para comparar senhas
 userSchema.methods.matchPassword = async function(enteredPassword) {
-  return await bcrypt.compare(enteredPassword, this.password);
+  if (!this.password) return false;
+  return bcrypt.compare(enteredPassword, this.password);
 };
 
 module.exports = mongoose.model('User', userSchema);

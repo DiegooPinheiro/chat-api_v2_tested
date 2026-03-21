@@ -1,40 +1,27 @@
-const jwt = require('jsonwebtoken');
+const admin = require('../config/firebaseAdmin');
 const User = require('../models/User');
 
 const protect = async (req, res, next) => {
-  let token;
+  const authHeader = req.headers.authorization || '';
 
-  if (!process.env.JWT_SECRET) {
-    return res.status(500).json({ message: 'JWT_SECRET não configurado no servidor' });
+  if (!authHeader.startsWith('Bearer ')) {
+    return res.status(401).json({ message: 'Nao autorizado, sem token Bearer' });
   }
 
-  if (
-    req.headers.authorization &&
-    req.headers.authorization.startsWith('Bearer')
-  ) {
-    try {
-      // Obter token do header
-      token = req.headers.authorization.split(' ')[1];
+  try {
+    const token = authHeader.split(' ')[1];
+    const decoded = await admin.auth().verifyIdToken(token);
+    const email = String(decoded.email || '').trim().toLowerCase();
 
-      // Verificar token
-      const decoded = jwt.verify(token, process.env.JWT_SECRET);
+    req.firebaseUser = decoded;
+    req.user = await User.findOne({
+      $or: [{ firebaseUid: decoded.uid }, ...(email ? [{ username: email }] : [])],
+    }).select('-password');
 
-      // Obter usuário do token
-      req.user = await User.findById(decoded.id).select('-password');
-
-      if (!req.user) {
-        return res.status(401).json({ message: 'Não autorizado, usuário não encontrado' });
-      }
-
-      next();
-    } catch (error) {
-      console.error(error);
-      return res.status(401).json({ message: 'Não autorizado, token falhou' });
-    }
-  }
-
-  if (!token) {
-    return res.status(401).json({ message: 'Não autorizado, sem token' });
+    return next();
+  } catch (error) {
+    console.error('[Auth] Firebase token invalido:', error.message);
+    return res.status(401).json({ message: 'Nao autorizado, token Firebase invalido' });
   }
 };
 

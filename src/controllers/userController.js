@@ -1,16 +1,17 @@
 const User = require('../models/User');
-const jwt = require('jsonwebtoken');
 
-const generateToken = (id) => {
-  return jwt.sign({ id }, process.env.JWT_SECRET, {
-    expiresIn: '30d'
-  });
+const ensureSyncedUser = (req, res) => {
+  if (req.user) return null;
+  res.status(404).json({ message: 'Usuario ainda nao sincronizado na Chat API' });
+  return true;
 };
 
-// @desc    Listar usuários (busca simples)
+// @desc    Listar usuarios (busca simples)
 // @route   GET /api/users?q=
 // @access  Private
 const listUsers = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
   const q = (req.query.q || '').toString().trim();
   const limit = Math.min(parseInt(req.query.limit, 10) || 50, 200);
 
@@ -20,7 +21,7 @@ const listUsers = async (req, res) => {
     if (q) {
       filter.$or = [
         { username: { $regex: q, $options: 'i' } },
-        { nome: { $regex: q, $options: 'i' } }
+        { nome: { $regex: q, $options: 'i' } },
       ];
     }
 
@@ -29,94 +30,53 @@ const listUsers = async (req, res) => {
       .sort({ nome: 1 })
       .limit(limit);
 
-    res.status(200).json(users);
+    return res.status(200).json(users);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Registrar novo usuário
+// @desc    Endpoint legado desativado
 // @route   POST /api/users
 // @access  Public
 const registerUser = async (req, res) => {
-  const { username, nome, password, foto } = req.body;
-
-  try {
-    const userExists = await User.findOne({ username });
-
-    if (userExists) {
-      return res.status(400).json({ message: 'Usuário já existe' });
-    }
-
-    const user = await User.create({
-      username,
-      nome,
-      password,
-      foto
-    });
-
-    if (user) {
-      res.status(201).json({
-        _id: user._id,
-        username: user.username,
-        nome: user.nome,
-        foto: user.foto,
-        token: generateToken(user._id)
-      });
-    } else {
-      res.status(400).json({ message: 'Dados de usuário inválidos' });
-    }
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  return res.status(410).json({
+    message: 'Cadastro por senha foi desativado. Use POST /api/auth/firebase com token do Firebase.',
+  });
 };
 
-// @desc    Autenticar usuário e obter token
+// @desc    Endpoint legado desativado
 // @route   POST /api/users/login
 // @access  Public
 const authUser = async (req, res) => {
-  const { username, password } = req.body;
-
-  try {
-    const user = await User.findOne({ username }).select('+password');
-
-    if (user && (await user.matchPassword(password))) {
-      res.json({
-        _id: user._id,
-        username: user.username,
-        nome: user.nome,
-        foto: user.foto,
-        token: generateToken(user._id)
-      });
-    } else {
-      res.status(401).json({ message: 'Username ou senha inválidos' });
-    }
-  } catch (error) {
-    res.status(500).json({ message: error.message });
-  }
+  return res.status(410).json({
+    message: 'Login por senha foi desativado. Use POST /api/auth/firebase com token do Firebase.',
+  });
 };
 
-// @desc    Obter perfil do usuário logado
+// @desc    Obter perfil do usuario logado
 // @route   GET /api/users/profile
 // @access  Private
 const getUserProfile = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
   const user = await User.findById(req.user._id);
 
   if (user) {
-    res.json({
+    return res.json({
       _id: user._id,
       username: user.username,
       nome: user.nome,
-      foto: user.foto
+      foto: user.foto,
     });
-  } else {
-    res.status(404).json({ message: 'Usuário não encontrado' });
   }
+
+  return res.status(404).json({ message: 'Usuario nao encontrado' });
 };
 
 module.exports = {
   listUsers,
   registerUser,
   authUser,
-  getUserProfile
+  getUserProfile,
 };

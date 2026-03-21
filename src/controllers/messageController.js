@@ -1,88 +1,88 @@
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 
-// @desc    Enviar mensagem
-// @route   POST /api/messages
-// @access  Private
+const ensureSyncedUser = (req, res) => {
+  if (req.user) return null;
+  res.status(404).json({ message: 'Usuario ainda nao sincronizado na Chat API' });
+  return true;
+};
+
 const sendMessage = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
   const { conversationId, text, mediaUrl, mediaType } = req.body;
   const senderId = req.user._id;
 
   try {
     if (!conversationId) {
-      return res.status(400).json({ message: 'Conversation ID é obrigatório' });
+      return res.status(400).json({ message: 'Conversation ID e obrigatorio' });
     }
 
     if (!text && !mediaUrl) {
-      return res.status(400).json({ message: 'A mensagem não pode estar vazia (texto ou mídia)' });
+      return res.status(400).json({ message: 'A mensagem nao pode estar vazia (texto ou midia)' });
     }
 
-    // Verificar se a conversa existe e se o usuário faz parte dela
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
-      return res.status(404).json({ message: 'Conversa não encontrada' });
+      return res.status(404).json({ message: 'Conversa nao encontrada' });
     }
 
-    if (!conversation.participants.includes(senderId)) {
-      return res.status(403).json({ message: 'Acesso negado: Você não faz parte desta conversa' });
+    if (!conversation.participants.some((participant) => String(participant) === String(senderId))) {
+      return res.status(403).json({ message: 'Acesso negado: voce nao faz parte desta conversa' });
     }
 
-    // Criar nova mensagem
     const newMessage = new Message({
       conversationId,
       senderId,
       text,
       mediaUrl,
-      mediaType
+      mediaType,
     });
 
     const savedMessage = await newMessage.save();
+    const lastText = text ? String(text) : mediaUrl ? 'Midia' : '';
 
-    // Atualizar a última mensagem da conversa
-    const lastText = text ? String(text) : mediaUrl ? '📎 Mídia' : '';
     await Conversation.findByIdAndUpdate(conversationId, {
       lastMessage: {
         text: lastText,
         senderId,
-        createdAt: savedMessage.createdAt
-      }
+        createdAt: savedMessage.createdAt,
+      },
     });
 
-    res.status(201).json(savedMessage);
+    return res.status(201).json(savedMessage);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Listar mensagens de uma conversa
-// @route   GET /api/messages/:conversationId
-// @access  Private
 const getMessages = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
   const { conversationId } = req.params;
   const userId = req.user._id;
 
   try {
-    // Verificar se o usuário faz parte da conversa
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
-      return res.status(404).json({ message: 'Conversa não encontrada' });
+      return res.status(404).json({ message: 'Conversa nao encontrada' });
     }
 
-    if (!conversation.participants.includes(userId)) {
-      return res.status(403).json({ message: 'Acesso negado: Você não faz parte desta conversa' });
+    if (!conversation.participants.some((participant) => String(participant) === String(userId))) {
+      return res.status(403).json({ message: 'Acesso negado: voce nao faz parte desta conversa' });
     }
 
     const messages = await Message.find({ conversationId })
       .sort({ createdAt: 1 })
       .populate('senderId', 'nome username foto');
 
-    res.status(200).json(messages);
+    return res.status(200).json(messages);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
 module.exports = {
   sendMessage,
-  getMessages
+  getMessages,
 };

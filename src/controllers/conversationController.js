@@ -2,89 +2,88 @@ const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const Message = require('../models/Message');
 
-// @desc    Criar nova conversa
-// @route   POST /api/conversations
-// @access  Private
+const ensureSyncedUser = (req, res) => {
+  if (req.user) return null;
+  res.status(404).json({ message: 'Usuario ainda nao sincronizado na Chat API' });
+  return true;
+};
+
 const createConversation = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
   const { participantId } = req.body;
   const senderId = req.user._id;
 
   try {
     if (!participantId) {
-      return res.status(400).json({ message: 'Participant ID é obrigatório' });
+      return res.status(400).json({ message: 'Participant ID e obrigatorio' });
     }
 
-    // Verificar se o outro usuário existe
     const otherUser = await User.findById(participantId);
     if (!otherUser) {
-      return res.status(404).json({ message: 'Participante não encontrado' });
+      return res.status(404).json({ message: 'Participante nao encontrado' });
     }
 
-    // Verificar se a conversa já existe
     const existingConversation = await Conversation.findOne({
-      participants: { $all: [senderId, participantId] }
+      participants: { $all: [senderId, participantId] },
     });
 
     if (existingConversation) {
       return res.status(200).json(existingConversation);
     }
 
-    // Criar nova conversa
     const newConversation = new Conversation({
-      participants: [senderId, participantId]
+      participants: [senderId, participantId],
     });
 
     const savedConversation = await newConversation.save();
-    res.status(201).json(savedConversation);
+    return res.status(201).json(savedConversation);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Listar conversas de um usuário
-// @route   GET /api/conversations/:userId
-// @access  Private
 const getUserConversations = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
   try {
-    // Verificar se o usuário está pedindo suas próprias conversas ou se é autorizado
     if (req.params.userId !== req.user._id.toString()) {
       return res.status(403).json({ message: 'Acesso negado' });
     }
 
     const conversations = await Conversation.find({
-      participants: { $in: [req.params.userId] }
+      participants: { $in: [req.params.userId] },
     })
-    .populate('participants', 'nome username foto')
-    .sort({ updatedAt: -1 });
+      .populate('participants', 'nome username foto')
+      .sort({ updatedAt: -1 });
 
-    res.status(200).json(conversations);
+    return res.status(200).json(conversations);
   } catch (error) {
-    res.status(500).json({ message: error.message });
+    return res.status(500).json({ message: error.message });
   }
 };
 
-// @desc    Excluir conversa (e mensagens)
-// @route   DELETE /api/conversations/:conversationId
-// @access  Private
 const deleteConversation = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
   const { conversationId } = req.params;
   const userId = req.user._id;
 
   try {
     const conversation = await Conversation.findById(conversationId);
     if (!conversation) {
-      return res.status(404).json({ message: 'Conversa não encontrada' });
+      return res.status(404).json({ message: 'Conversa nao encontrada' });
     }
 
-    if (!conversation.participants.includes(userId)) {
-      return res.status(403).json({ message: 'Acesso negado: Você não faz parte desta conversa' });
+    if (!conversation.participants.some((participant) => String(participant) === String(userId))) {
+      return res.status(403).json({ message: 'Acesso negado: voce nao faz parte desta conversa' });
     }
 
     const messagesResult = await Message.deleteMany({ conversationId: conversation._id });
     await Conversation.deleteOne({ _id: conversation._id });
 
     return res.status(200).json({
-      message: 'Conversa excluída com sucesso',
+      message: 'Conversa excluida com sucesso',
       deletedMessages: messagesResult?.deletedCount ?? 0,
     });
   } catch (error) {
@@ -95,5 +94,5 @@ const deleteConversation = async (req, res) => {
 module.exports = {
   createConversation,
   getUserConversations,
-  deleteConversation
+  deleteConversation,
 };
