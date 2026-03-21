@@ -2,10 +2,14 @@ const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const admin = require('../config/firebaseAdmin');
+const { setSocketServer } = require('./socketStore');
+const { markConversationAsRead } = require('../controllers/messageController');
 
 const onlineUsers = new Map();
 
 const setupChatSocket = (io) => {
+  setSocketServer(io);
+
   io.use(async (socket, next) => {
     try {
       const token = socket.handshake.auth?.token;
@@ -82,6 +86,36 @@ const setupChatSocket = (io) => {
     socket.on('stop_typing', (data) => relayTyping('stop_typing', { ...data, typing: false }));
     socket.on('typing_status', (data) => relayTyping('typing_status', data));
     socket.on('typingStatus', (data) => relayTyping('typingStatus', data));
+
+    socket.on('mark_messages_read', async (data, ack) => {
+      const readerId = socket.data.userId ? String(socket.data.userId) : null;
+      const { conversationId } = data || {};
+
+      try {
+        if (!readerId || !conversationId) {
+          if (typeof ack === 'function') ack({ ok: false, message: 'conversationId e obrigatorio' });
+          return;
+        }
+
+        const conversation = await Conversation.findById(conversationId);
+        if (!conversation) {
+          if (typeof ack === 'function') ack({ ok: false, message: 'Conversa nao encontrada' });
+          return;
+        }
+
+        const participants = conversation.participants.map((participant) => String(participant));
+        if (!participants.includes(readerId)) {
+          if (typeof ack === 'function') ack({ ok: false, message: 'Acesso negado' });
+          return;
+        }
+
+        const result = await markConversationAsRead(conversationId, readerId);
+        if (typeof ack === 'function') ack({ ok: true, ...result });
+      } catch (error) {
+        console.error('Erro no socket mark_messages_read:', error.message);
+        if (typeof ack === 'function') ack({ ok: false, message: error.message });
+      }
+    });
 
     socket.on('send_message', async (data) => {
       const { conversationId, text, receiverId, mediaUrl, mediaType } = data || {};
