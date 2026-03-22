@@ -118,7 +118,7 @@ const setupChatSocket = (io) => {
     });
 
     socket.on('send_message', async (data) => {
-      const { conversationId, text, receiverId, mediaUrl, mediaType } = data || {};
+      const { conversationId, text, receiverId, mediaUrl, mediaType, clientMessageId } = data || {};
       const senderId = socket.data.userId ? String(socket.data.userId) : null;
 
       try {
@@ -158,8 +158,13 @@ const setupChatSocket = (io) => {
           outgoing = await savedMessage.populate('senderId', 'nome username foto');
         }
 
-        socket.emit('receive_message', outgoing);
-        emitToUser(receiverId, 'receive_message', outgoing);
+        const outgoingPayload = {
+          ...(typeof outgoing.toObject === 'function' ? outgoing.toObject() : outgoing),
+          clientMessageId: clientMessageId || null,
+        };
+
+        socket.emit('receive_message', outgoingPayload);
+        emitToUser(receiverId, 'receive_message', outgoingPayload);
       } catch (error) {
         console.error('Erro no socket send_message:', error.message);
       }

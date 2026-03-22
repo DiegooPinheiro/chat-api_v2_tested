@@ -57,7 +57,32 @@ const getUserConversations = async (req, res) => {
       .populate('participants', 'nome username foto')
       .sort({ updatedAt: -1 });
 
-    return res.status(200).json(conversations);
+    const unreadCounts = await Message.aggregate([
+      {
+        $match: {
+          conversationId: { $in: conversations.map((conversation) => conversation._id) },
+          senderId: { $ne: req.user._id },
+          read: false,
+        },
+      },
+      {
+        $group: {
+          _id: '$conversationId',
+          unreadCount: { $sum: 1 },
+        },
+      },
+    ]);
+
+    const unreadCountMap = new Map(
+      unreadCounts.map((item) => [String(item._id), Number(item.unreadCount || 0)])
+    );
+
+    const enrichedConversations = conversations.map((conversation) => ({
+      ...conversation.toObject(),
+      unreadCount: unreadCountMap.get(String(conversation._id)) || 0,
+    }));
+
+    return res.status(200).json(enrichedConversations);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
