@@ -164,6 +164,81 @@ const markMessagesAsRead = async (req, res) => {
   }
 };
 
+const updateMessage = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
+  const { messageId } = req.params;
+  const userId = req.user._id;
+  const nextText = String(req.body?.text || '').trim();
+
+  try {
+    if (!nextText) {
+      return res.status(400).json({ message: 'O texto da mensagem nao pode ficar vazio' });
+    }
+
+    const message = await Message.findById(messageId);
+    if (!message) {
+      return res.status(404).json({ message: 'Mensagem nao encontrada' });
+    }
+
+    const { error, conversation } = await ensureConversationAccess(message.conversationId, userId);
+    if (error) {
+      return res.status(error.status).json({ message: error.message });
+    }
+
+    if (String(message.senderId) !== String(userId)) {
+      return res.status(403).json({ message: 'Voce so pode editar mensagens enviadas por voce' });
+    }
+
+    if (message.mediaUrl && !message.text) {
+      return res.status(400).json({ message: 'Edicao ainda disponivel apenas para mensagens de texto' });
+    }
+
+    message.text = nextText;
+    await message.save();
+
+    const conversationLastMessage = conversation?.lastMessage;
+    const isConversationLastMessage =
+      conversationLastMessage &&
+      String(conversationLastMessage.senderId) === String(message.senderId) &&
+      new Date(conversationLastMessage.createdAt).getTime() === new Date(message.createdAt).getTime();
+
+    let lastMessage = conversationLastMessage || null;
+    if (isConversationLastMessage) {
+      lastMessage = {
+        text: nextText,
+        senderId: message.senderId,
+        createdAt: message.createdAt,
+      };
+
+      await Conversation.findByIdAndUpdate(message.conversationId, {
+        lastMessage,
+      });
+    }
+
+    const populatedMessage = await Message.findById(message._id).populate('senderId', 'nome username foto');
+    const participants = (conversation?.participants || []).map((participant) => String(participant));
+    const payload = {
+      conversationId: String(message.conversationId),
+      message: populatedMessage,
+      updatedBy: String(userId),
+      lastMessage,
+    };
+
+    participants.forEach((participantId) => {
+      emitToUserRoom(participantId, 'message_updated', payload);
+    });
+
+    return res.status(200).json({
+      message: 'Mensagem atualizada com sucesso',
+      updatedMessage: populatedMessage,
+      lastMessage,
+    });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 const deleteMessage = async (req, res) => {
   if (ensureSyncedUser(req, res)) return;
 
@@ -266,6 +341,7 @@ module.exports = {
   getMessages,
   markMessagesAsRead,
   markConversationAsRead,
+  updateMessage,
   deleteMessage,
   deleteManyMessages,
   syncConversationLastMessage,
