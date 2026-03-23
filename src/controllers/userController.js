@@ -74,9 +74,29 @@ const getUserProfile = async (req, res) => {
   return res.status(404).json({ message: 'Usuario nao encontrado' });
 };
 
+// @desc    Registrar token de Push Notification do Expo
+// @route   POST /api/users/push-token
+// @access  Private
+const registerPushToken = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
+  const { token } = req.body;
+  if (!token) {
+    return res.status(400).json({ message: 'Token de notificacao e obrigatorio' });
+  }
+
+  try {
+    await User.findByIdAndUpdate(req.user._id, { expoPushToken: token });
+    return res.status(200).json({ message: 'Push token registrado com sucesso' });
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   listUsers,
   registerUser,
   authUser,
   getUserProfile,
+  registerPushToken,
 };

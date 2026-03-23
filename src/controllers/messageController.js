@@ -117,6 +117,48 @@ const sendMessage = async (req, res) => {
       },
     });
 
+    try {
+      let outgoing = savedMessage;
+      if (process.env.SOCKET_POPULATE === '1' && typeof savedMessage.populate === 'function') {
+        outgoing = await savedMessage.populate('senderId', 'nome username foto');
+      }
+
+      const populatedMessage = {
+        ...(typeof outgoing.toObject === 'function' ? outgoing.toObject() : outgoing),
+      };
+
+      // Ensure we have access to the conversation participants
+      if (conversation && conversation.participants) {
+        const receiverIdObj = conversation.participants.find(p => String(p) !== String(senderId));
+        if (receiverIdObj) {
+          const receiverIdStr = String(receiverIdObj);
+          
+          // Emit to the receiver's socket room
+          // emitToUserRoom returns true if a socket was present in the room
+          const isOnline = emitToUserRoom(receiverIdStr, 'receive_message', populatedMessage);
+          
+          if (!isOnline) {
+            const User = require('../models/User');
+            const receiver = await User.findById(receiverIdStr).select('expoPushToken');
+            
+            if (receiver && receiver.expoPushToken) {
+              const { sendPushNotification } = require('../services/expoPushService');
+              const sender = req.user;
+              const pushBody = text ? text : (mediaUrl ? `📸 Arquivo de midia` : 'Nova mensagem');
+              
+              sendPushNotification(receiver.expoPushToken, {
+                title: sender.nome || 'Nova mensagem',
+                body: pushBody,
+                data: { conversationId, type: 'new_message' }
+              });
+            }
+          }
+        }
+      }
+    } catch (socketErr) {
+      console.error('Erro ao processar socket/push via REST:', socketErr.message);
+    }
+
     return res.status(201).json(savedMessage);
   } catch (error) {
     return res.status(500).json({ message: error.message });

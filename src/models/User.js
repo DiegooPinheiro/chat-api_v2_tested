@@ -28,6 +28,10 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  expoPushToken: {
+    type: String,
+    default: null,
+  },
 }, {
   timestamps: true,
   toJSON: { virtuals: true },

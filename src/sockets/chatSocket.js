@@ -64,7 +64,7 @@ const setupChatSocket = (io) => {
       }
 
       io.to(`user:${userId}`).emit(event, payload);
-      return false;
+      return false; // Returns true if connected on this node, false if not (offline or other node)
     };
 
     const relayTyping = (eventName, data) => {
@@ -164,7 +164,27 @@ const setupChatSocket = (io) => {
         };
 
         socket.emit('receive_message', outgoingPayload);
-        emitToUser(receiverId, 'receive_message', outgoingPayload);
+        const isOnline = emitToUser(receiverId, 'receive_message', outgoingPayload);
+
+        if (!isOnline) {
+          try {
+            const receiver = await User.findById(receiverId).select('expoPushToken');
+            if (receiver && receiver.expoPushToken) {
+              const { sendPushNotification } = require('../services/expoPushService');
+              const senderName = socket.data.mongoUser?.nome || 'Nova mensagem';
+              const pushBody = text ? text : (mediaUrl ? `📸 Arquivo de midia` : 'Nova mensagem');
+              
+              sendPushNotification(receiver.expoPushToken, {
+                title: senderName,
+                body: pushBody,
+                data: { conversationId, type: 'new_message' }
+              });
+            }
+          } catch (pushErr) {
+            console.error('Erro ao enviar push via socket:', pushErr.message);
+          }
+        }
+
       } catch (error) {
         console.error('Erro no socket send_message:', error.message);
       }

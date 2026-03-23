@@ -342,21 +342,11 @@ Resposta:
 
 ### 5.5. Media
 
-#### `POST /api/media/upload`
+#### `POST /api/media/upload` (DEPRECADO)
 
-Recebe `multipart/form-data` com o campo `media` e retorna a URL acessivel.
-
-Resposta:
-
-```json
-{
-  "message": "Upload realizado com sucesso",
-  "mediaUrl": "/uploads/media-1710000000000-123456.png",
-  "mediaType": "image",
-  "fileName": "foto.png",
-  "size": 123456
-}
-```
+> ⚠️ **Aviso:** Este endpoint foi descontinuado devido ao disco efêmero do Render gratuito apagar os arquivos a cada restart.
+> 
+> **Novo Fluxo:** O App Mobile agora faz o upload dos arquivos diretamente para o **Cloudinary** e envia apenas a `mediaUrl` permanente gerada para a API através dos endpoints de mensagem (`POST /api/messages` ou socket `send_message`). A API atua apenas como ponte.
 
 ## 6. Socket.IO
 
@@ -639,7 +629,8 @@ No painel do Render:
 - endpoint de delecao de mensagens respondendo
 - evento `messages_deleted` chegando no cliente
 - deploy mais recente com lockfile atualizado
+- **Cloudinary:** Certifique-se de que o App envia a URL permanente do Cloudinary em `mediaUrl`.
 
 ---
 
-Atualizado em 21 de marco de 2026.
+Atualizado em 23 de marco de 2026.
