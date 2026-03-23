@@ -41,9 +41,14 @@ const syncConversationLastMessage = async (conversationId) => {
   return nextLastMessage;
 };
 
+const buildVisibleMessageQuery = (conversationId, userId) => ({
+  conversationId,
+  hiddenFor: { $ne: userId },
+});
+
 const markConversationAsRead = async (conversationId, readerId) => {
   const unreadMessages = await Message.find({
-    conversationId,
+    ...buildVisibleMessageQuery(conversationId, readerId),
     senderId: { $ne: readerId },
     read: false,
   }).select('_id senderId');
@@ -132,7 +137,7 @@ const getMessages = async (req, res) => {
 
     await markConversationAsRead(conversationId, userId);
 
-    const messages = await Message.find({ conversationId })
+    const messages = await Message.find(buildVisibleMessageQuery(conversationId, userId))
       .sort({ createdAt: 1 })
       .populate('senderId', 'nome username foto');
 
@@ -195,6 +200,7 @@ const updateMessage = async (req, res) => {
     }
 
     message.text = nextText;
+    message.edited = true;
     await message.save();
 
     const conversationLastMessage = conversation?.lastMessage;
@@ -257,10 +263,21 @@ const deleteMessage = async (req, res) => {
       return res.status(error.status).json({ message: error.message });
     }
 
-    await Message.deleteOne({ _id: message._id });
-    const lastMessage = await syncConversationLastMessage(message.conversationId);
-
     const participants = (conversation?.participants || []).map((participant) => String(participant));
+    let lastMessage = null;
+    let recipients = [String(userId)];
+
+    if (deleteForEveryone) {
+      await Message.deleteOne({ _id: message._id });
+      lastMessage = await syncConversationLastMessage(message.conversationId);
+      recipients = participants;
+    } else {
+      await Message.updateOne(
+        { _id: message._id },
+        { $addToSet: { hiddenFor: userId } }
+      );
+    }
+
     const payload = {
       conversationId: String(message.conversationId),
       messageIds: [String(message._id)],
@@ -269,7 +286,7 @@ const deleteMessage = async (req, res) => {
       lastMessage,
     };
 
-    participants.forEach((participantId) => {
+    recipients.forEach((participantId) => {
       emitToUserRoom(participantId, 'messages_deleted', payload);
     });
 
@@ -309,11 +326,22 @@ const deleteManyMessages = async (req, res) => {
       return res.status(error.status).json({ message: error.message });
     }
 
-    const normalizedIds = messages.map((message) => String(message._id));
-    await Message.deleteMany({ _id: { $in: normalizedIds } });
-    const lastMessage = await syncConversationLastMessage(conversationId);
-
     const participants = (conversation?.participants || []).map((participant) => String(participant));
+    const normalizedIds = messages.map((message) => String(message._id));
+    let lastMessage = null;
+    let recipients = [String(userId)];
+
+    if (deleteForEveryone === true) {
+      await Message.deleteMany({ _id: { $in: normalizedIds } });
+      lastMessage = await syncConversationLastMessage(conversationId);
+      recipients = participants;
+    } else {
+      await Message.updateMany(
+        { _id: { $in: normalizedIds } },
+        { $addToSet: { hiddenFor: userId } }
+      );
+    }
+
     const payload = {
       conversationId,
       messageIds: normalizedIds,
@@ -322,7 +350,7 @@ const deleteManyMessages = async (req, res) => {
       lastMessage,
     };
 
-    participants.forEach((participantId) => {
+    recipients.forEach((participantId) => {
       emitToUserRoom(participantId, 'messages_deleted', payload);
     });
 

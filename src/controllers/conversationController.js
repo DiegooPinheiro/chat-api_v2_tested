@@ -63,6 +63,7 @@ const getUserConversations = async (req, res) => {
           conversationId: { $in: conversations.map((conversation) => conversation._id) },
           senderId: { $ne: req.user._id },
           read: false,
+          hiddenFor: { $ne: req.user._id },
         },
       },
       {
@@ -77,9 +78,40 @@ const getUserConversations = async (req, res) => {
       unreadCounts.map((item) => [String(item._id), Number(item.unreadCount || 0)])
     );
 
+    const lastVisibleMessages = await Message.aggregate([
+      {
+        $match: {
+          conversationId: { $in: conversations.map((conversation) => conversation._id) },
+          hiddenFor: { $ne: req.user._id },
+        },
+      },
+      { $sort: { createdAt: -1 } },
+      {
+        $group: {
+          _id: '$conversationId',
+          text: { $first: '$text' },
+          mediaUrl: { $first: '$mediaUrl' },
+          senderId: { $first: '$senderId' },
+          createdAt: { $first: '$createdAt' },
+        },
+      },
+    ]);
+
+    const lastVisibleMessageMap = new Map(
+      lastVisibleMessages.map((item) => [
+        String(item._id),
+        {
+          text: item.text ? String(item.text) : item.mediaUrl ? 'Midia' : '',
+          senderId: item.senderId,
+          createdAt: item.createdAt,
+        },
+      ])
+    );
+
     const enrichedConversations = conversations.map((conversation) => ({
       ...conversation.toObject(),
       unreadCount: unreadCountMap.get(String(conversation._id)) || 0,
+      lastMessage: lastVisibleMessageMap.get(String(conversation._id)) || null,
     }));
 
     return res.status(200).json(enrichedConversations);

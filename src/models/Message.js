@@ -28,6 +28,14 @@ const messageSchema = new mongoose.Schema({
   read: {
     type: Boolean,
     default: false
+  },
+  hiddenFor: [{
+    type: mongoose.Schema.Types.ObjectId,
+    ref: 'User'
+  }],
+  edited: {
+    type: Boolean,
+    default: false
   }
 }, {
   timestamps: true
