@@ -163,8 +163,8 @@ const setupChatSocket = (io) => {
           clientMessageId: clientMessageId || null,
         };
 
-        socket.emit('receive_message', outgoingPayload);
         const isOnline = emitToUser(receiverId, 'receive_message', outgoingPayload);
+        socket.emit('receive_message', { ...outgoingPayload, localStatus: isOnline ? 'delivered' : 'sent' });
 
         if (!isOnline) {
           try {
