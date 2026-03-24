@@ -93,10 +93,39 @@ const registerPushToken = async (req, res) => {
   }
 };
 
+// @desc    Sincronizar contatos da agenda
+// @route   POST /api/users/sync-contacts
+// @access  Private
+const syncContacts = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
+  const { phones } = req.body;
+  
+  if (!phones || !Array.isArray(phones)) {
+    return res.status(400).json({ message: 'A lista de telefones (phones) é obrigatória.' });
+  }
+
+  // Remove formatação para match exato (caso o banco não tenha símbolos)
+  const normalizedPhones = phones.map(p => String(p).replace(/\D/g, ''));
+
+  try {
+    // Busca usuários (exceto o próprio) cujo phone esteja na lista (e não seja vazio)
+    const users = await User.find({
+      _id: { $ne: req.user._id },
+      phone: { $in: normalizedPhones, $ne: '' }
+    }).select('_id username nome foto phone');
+
+    return res.status(200).json(users);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   listUsers,
   registerUser,
   authUser,
   getUserProfile,
   registerPushToken,
+  syncContacts,
 };

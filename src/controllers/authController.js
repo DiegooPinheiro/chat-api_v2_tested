@@ -17,6 +17,7 @@ const syncFirebaseUser = async (req, res) => {
     const bodyEmail = normalizeEmail(req.body?.email);
     const bodyName = normalizeName(req.body?.displayName);
     const bodyPhoto = String(req.body?.photoURL || '').trim();
+    const bodyPhone = String(req.body?.phone || '').replace(/\D/g, '').trim();
 
     if (bodyEmail && bodyEmail !== tokenEmail) {
       return res.status(400).json({ message: 'Email incompativel com o token Firebase.' });
@@ -25,6 +26,7 @@ const syncFirebaseUser = async (req, res) => {
     const username = tokenEmail;
     const nome = bodyName || tokenName || 'Usuario';
     const foto = bodyPhoto || tokenPhoto || '';
+    const phone = bodyPhone || '';
 
     let user = await User.findOne({
       $or: [{ firebaseUid }, { username }],
@@ -36,12 +38,14 @@ const syncFirebaseUser = async (req, res) => {
         username,
         nome,
         foto,
+        phone,
       });
     } else {
       user.firebaseUid = firebaseUid;
       user.username = username;
       user.nome = nome;
       user.foto = foto;
+      if (phone) user.phone = phone;
       await user.save();
     }
 
@@ -50,6 +54,7 @@ const syncFirebaseUser = async (req, res) => {
       username: user.username,
       nome: user.nome,
       foto: user.foto,
+      phone: user.phone,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });

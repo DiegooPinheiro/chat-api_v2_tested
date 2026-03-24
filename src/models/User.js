@@ -28,6 +28,11 @@ const userSchema = new mongoose.Schema({
     type: String,
     default: '',
   },
+  phone: {
+    type: String,
+    sparse: true,
+    trim: true,
+  },
   expoPushToken: {
     type: String,
     default: null,
