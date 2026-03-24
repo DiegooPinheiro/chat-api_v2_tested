@@ -81,13 +81,23 @@ const registerPushToken = async (req, res) => {
   if (ensureSyncedUser(req, res)) return;
 
   const { token } = req.body;
-  if (!token) {
-    return res.status(400).json({ message: 'Token de notificacao e obrigatorio' });
-  }
-
+  
   try {
-    await User.findByIdAndUpdate(req.user._id, { expoPushToken: token });
-    return res.status(200).json({ message: 'Push token registrado com sucesso' });
+    // 1. Se o token for fornecido, removemos ele de QUALQUER outro usuário 
+    // que possa estar usando o mesmo aparelho (evita duplicidade em testes)
+    if (token && token.trim() !== '') {
+      await User.updateMany(
+        { expoPushToken: token, _id: { $ne: req.user._id } },
+        { expoPushToken: '' }
+      );
+    }
+
+    // 2. Atualiza o token do usuário atual (ou limpa se o token enviado for vazio)
+    await User.findByIdAndUpdate(req.user._id, { expoPushToken: token || '' });
+    
+    return res.status(200).json({ 
+      message: token ? 'Push token registrado com sucesso' : 'Push token removido com sucesso' 
+    });
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
