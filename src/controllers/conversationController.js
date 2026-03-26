@@ -2,6 +2,7 @@ const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const { auditLog } = require('../utils/logger');
+const { decrypt } = require('../utils/crypto');
 
 const ensureSyncedUser = (req, res) => {
   if (req.user) return null;
@@ -39,6 +40,46 @@ const createConversation = async (req, res) => {
 
     const savedConversation = await newConversation.save();
     return res.status(201).json(savedConversation);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
+const createGroup = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
+  const { participantIds, groupName, groupAvatar } = req.body;
+  const adminId = req.user._id;
+
+  try {
+    if (!participantIds || !Array.isArray(participantIds) || participantIds.length === 0) {
+      return res.status(400).json({ message: 'Lista de participantes e obrigatoria' });
+    }
+
+    if (!groupName || String(groupName).trim().length < 3) {
+      return res.status(400).json({ message: 'Nome do grupo e obrigatorio (min. 3 caracteres)' });
+    }
+
+    // Adiciona o criador aos participantes se não estiver lá
+    const allParticipants = [...new Set([...participantIds, String(adminId)])];
+
+    const newGroup = new Conversation({
+      participants: allParticipants,
+      isGroup: true,
+      groupName: String(groupName).trim(),
+      groupAvatar: groupAvatar || null,
+      groupAdmin: adminId,
+    });
+
+    const savedGroup = await newGroup.save();
+    
+    auditLog('CREATE_GROUP', adminId, { 
+      conversationId: savedGroup._id, 
+      groupName: savedGroup.groupName,
+      participantCount: allParticipants.length 
+    });
+
+    return res.status(201).json(savedGroup);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -109,11 +150,20 @@ const getUserConversations = async (req, res) => {
       ])
     );
 
-    const enrichedConversations = conversations.map((conversation) => ({
-      ...conversation.toObject(),
-      unreadCount: unreadCountMap.get(String(conversation._id)) || 0,
-      lastMessage: lastVisibleMessageMap.get(String(conversation._id)) || null,
-    }));
+    const enrichedConversations = conversations.map((conversation) => {
+      const obj = conversation.toObject();
+      const lastMsg = lastVisibleMessageMap.get(String(conversation._id)) || null;
+      
+      if (lastMsg && lastMsg.text) {
+        lastMsg.text = decrypt(lastMsg.text);
+      }
+      
+      return {
+        ...obj,
+        unreadCount: unreadCountMap.get(String(conversation._id)) || 0,
+        lastMessage: lastMsg,
+      };
+    });
 
     return res.status(200).json(enrichedConversations);
   } catch (error) {
@@ -153,6 +203,7 @@ const deleteConversation = async (req, res) => {
 
 module.exports = {
   createConversation,
+  createGroup,
   getUserConversations,
   deleteConversation,
 };

@@ -69,19 +69,31 @@ const setupChatSocket = (io) => {
       return false; // Returns true if connected on this node, false if not (offline or other node)
     };
 
-    const relayTyping = (eventName, data) => {
+    const relayTyping = async (eventName, data) => {
       const senderId = socket.data.userId ? String(socket.data.userId) : null;
       if (!senderId) return;
 
-      const { conversationId, receiverId, typing } = data || {};
-      if (!conversationId || !receiverId) return;
+      const { conversationId, typing } = data || {};
+      if (!conversationId) return;
 
-      emitToUser(receiverId, eventName, {
-        conversationId,
-        receiverId,
-        senderId,
-        typing: typing === false ? false : true,
-      });
+      try {
+        const conversation = await Conversation.findById(conversationId).select('participants');
+        if (!conversation) return;
+
+        const otherParticipants = conversation.participants
+          .map(p => String(p))
+          .filter(id => id !== senderId);
+
+        otherParticipants.forEach(pId => {
+          emitToUser(pId, eventName, {
+            conversationId,
+            senderId,
+            typing: typing === false ? false : true,
+          });
+        });
+      } catch (err) {
+        console.error('Erro ao repassar typing status:', err.message);
+      }
     };
 
     socket.on('typing', (data) => relayTyping('typing', { ...data, typing: true }));
@@ -126,7 +138,8 @@ const setupChatSocket = (io) => {
       const text = sanitizeText(initialText, senderId);
 
       try {
-        if (!senderId || !conversationId || !receiverId || (!text && !mediaUrl)) {
+        // Em grupos o receiverId pode ser nulo, focamos no conversationId
+        if (!senderId || !conversationId || (!text && !mediaUrl)) {
           return;
         }
 
@@ -134,7 +147,7 @@ const setupChatSocket = (io) => {
         if (!conversation) return;
 
         const participants = conversation.participants.map((participant) => String(participant));
-        if (!participants.includes(senderId) || !participants.includes(String(receiverId))) {
+        if (!participants.includes(senderId)) {
           return;
         }
 
@@ -164,31 +177,49 @@ const setupChatSocket = (io) => {
 
         const outgoingPayload = {
           ...(typeof outgoing.toObject === 'function' ? outgoing.toObject() : outgoing),
-          text: text, // Mantemos o texto original (descriptografado) para o socket
+          text: text, 
           clientMessageId: clientMessageId || null,
         };
 
-        const isOnline = emitToUser(receiverId, 'receive_message', outgoingPayload);
-        socket.emit('receive_message', { ...outgoingPayload, localStatus: isOnline ? 'delivered' : 'sent' });
+        // Enviar para todos os outros participantes
+        const otherParticipants = participants.filter(pId => pId !== senderId);
+        
+        // Se for um chat 1-on-1 e tiver receiverId específico, mantemos a lógica de status para o remetente
+        let hasAnyOnline = false;
 
-        if (!isOnline) {
-          try {
-            const receiver = await User.findById(receiverId).select('expoPushToken');
-            if (receiver && receiver.expoPushToken) {
-              const { sendPushNotification } = require('../services/expoPushService');
-              const senderName = socket.data.mongoUser?.nome || 'Nova mensagem';
-              const pushBody = text ? text : (mediaUrl ? `📸 Arquivo de midia` : 'Nova mensagem');
-              
-              sendPushNotification(receiver.expoPushToken, {
-                title: senderName,
-                body: pushBody,
-                data: { conversationId, type: 'new_message' }
-              });
+        for (const pId of otherParticipants) {
+          const isOnline = emitToUser(pId, 'receive_message', outgoingPayload);
+          if (isOnline) hasAnyOnline = true;
+
+          // Push Notifications para quem está offline
+          if (!isOnline) {
+            try {
+              const receiver = await User.findById(pId).select('expoPushToken');
+              if (receiver && receiver.expoPushToken) {
+                const { sendPushNotification } = require('../services/expoPushService');
+                const senderName = conversation.isGroup 
+                  ? `${conversation.groupName}: ${socket.data.mongoUser?.nome || 'Membro'}`
+                  : (socket.data.mongoUser?.nome || 'Nova mensagem');
+                
+                const pushBody = text ? text : (mediaUrl ? `📸 Arquivo de midia` : 'Nova mensagem');
+                
+                sendPushNotification(receiver.expoPushToken, {
+                  title: senderName,
+                  body: pushBody,
+                  data: { conversationId, type: 'new_message' }
+                });
+              }
+            } catch (pushErr) {
+              console.error(`Erro ao enviar push para ${pId}:`, pushErr.message);
             }
-          } catch (pushErr) {
-            console.error('Erro ao enviar push via socket:', pushErr.message);
           }
         }
+
+        // Emitir de volta para o próprio remetente para confirmar o recebimento/sincronia
+        socket.emit('receive_message', { 
+          ...outgoingPayload, 
+          localStatus: hasAnyOnline ? 'delivered' : 'sent' 
+        });
 
       } catch (error) {
         console.error('Erro no socket send_message:', error.message);
