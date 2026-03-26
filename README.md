@@ -12,6 +12,9 @@ A API oferece:
 - envio de mensagens de texto e midia
 - socket em tempo real
 - status de mensagem com leitura (`read`)
+- **Sanitização de Mensagens (XSS Protection)**
+- **Criptografia AES-256 das mensagens em repouso**
+- **Logs de Auditoria de Ações Importantes**
 
 ## 2. Estrutura do projeto
 
@@ -553,6 +556,9 @@ Fluxo de apagado:
 - nao confie em `senderId` vindo do cliente sem validar o usuario autenticado
 - use sempre o usuario autenticado a partir do token Firebase
 - o Socket.IO deve ser autenticado no handshake
+- **Criptografia:** O segredo `ENCRYPTION_KEY` deve ser de 32 caracteres.
+- **Deleção:** Apenas o autor original pode deletar para todos (`deleteForEveryone`).
+- **Sanitização:** Todas as mensagens são limpas automaticamente para remover tags HTML/Scripts.
 
 ## 10. Validacao local
 

@@ -68,5 +68,15 @@ O projeto está pronto para ser utilizado e serve como uma base sólida para fut
 
 ---
 
-**Auditor:** Manus AI
-**Data:** 14 de Março de 2026
+## 7. Adendos de Segurança (26 de Março de 2026)
+
+Este adendo detalha as melhorias de segurança implementadas em Março de 2026 sob demanda do projeto Vibe:
+
+- **Criptografia em Repouso (AES-256-CBC):** Implementada biblioteca nativa para cifrar todo conteúdo de texto de mensagens. O banco agora armazena apenas dados cifrados, com chave mestra externa.
+- **Sanitização de XSS:** Implementada limpeza automática de tags HTML e scripts em todas as rotas de mensagem e sockets.
+- **Controle de Privilégios (Access Control):** Refinamento nas permissões de deleção global, assegurando que apenas o remetente original possa apagar uma mensagem para todos.
+- **Sistema de Auditoria (Audit Logs):** Novo utilitário `logger.js` grava ações críticas em `audit.log` com timestamps e IDs de usuários para monitoramento de segurança e investigações.
+- **Segurança de Ambiente:** Todas as credenciais de serviços externos (Firebase, Cloudinary) foram migradas para o arquivo `.env`.
+
+**Auditor:** Antigravity AI
+**Data:** 26 de Março de 2026
