@@ -201,9 +201,34 @@ const deleteConversation = async (req, res) => {
   }
 };
 
+const getConversationById = async (req, res) => {
+  if (ensureSyncedUser(req, res)) return;
+
+  const { conversationId } = req.params;
+  const userId = req.user._id;
+
+  try {
+    const conversation = await Conversation.findById(conversationId)
+      .populate('participants', 'nome username foto');
+
+    if (!conversation) {
+      return res.status(404).json({ message: 'Conversa nao encontrada' });
+    }
+
+    if (!conversation.participants.some((p) => String(p._id) === String(userId))) {
+      return res.status(403).json({ message: 'Acesso negado: voce nao faz parte desta conversa' });
+    }
+
+    return res.status(200).json(conversation);
+  } catch (error) {
+    return res.status(500).json({ message: error.message });
+  }
+};
+
 module.exports = {
   createConversation,
   createGroup,
   getUserConversations,
+  getConversationById,
   deleteConversation,
 };
