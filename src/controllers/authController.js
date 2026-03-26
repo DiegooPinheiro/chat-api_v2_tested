@@ -1,4 +1,5 @@
 const User = require('../models/User');
+const { auditLog } = require('../utils/logger');
 
 const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
 const normalizeName = (value) => String(value || '').trim();
@@ -48,6 +49,8 @@ const syncFirebaseUser = async (req, res) => {
       if (phone) user.phone = phone;
       await user.save();
     }
+
+    auditLog(user ? 'USER_SYNC_UPDATE' : 'USER_SYNC_CREATE', user?._id || 'NEW', { firebaseUid, username });
 
     return res.status(200).json({
       _id: user._id,

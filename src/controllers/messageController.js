@@ -1,6 +1,7 @@
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const { emitToUserRoom } = require('../sockets/socketStore');
+const { auditLog } = require('../utils/logger');
 
 const ensureSyncedUser = (req, res) => {
   if (req.user) return null;
@@ -310,9 +311,15 @@ const deleteMessage = async (req, res) => {
     let recipients = [String(userId)];
 
     if (deleteForEveryone) {
+      if (String(message.senderId) !== String(userId)) {
+        auditLog('DELETE_FOR_EVERYONE_FAILED_NOT_AUTHOR', userId, { messageId, conversationId: message.conversationId });
+        return res.status(403).json({ message: 'Apenas o autor pode excluir a mensagem para todos' });
+      }
+
       await Message.deleteOne({ _id: message._id });
       lastMessage = await syncConversationLastMessage(message.conversationId);
       recipients = participants;
+      auditLog('DELETE_MESSAGE_FOR_EVERYONE', userId, { messageId, conversationId: message.conversationId });
     } else {
       await Message.updateOne(
         { _id: message._id },
@@ -374,9 +381,16 @@ const deleteManyMessages = async (req, res) => {
     let recipients = [String(userId)];
 
     if (deleteForEveryone === true) {
+      const unauthorizedMessages = messages.filter((m) => String(m.senderId) !== String(userId));
+      if (unauthorizedMessages.length > 0) {
+        auditLog('DELETE_MANY_FOR_EVERYONE_FAILED_NOT_AUTHOR', userId, { conversationId, count: unauthorizedMessages.length });
+        return res.status(403).json({ message: 'Voce so pode deletar para todos as mensagens enviadas por voce' });
+      }
+
       await Message.deleteMany({ _id: { $in: normalizedIds } });
       lastMessage = await syncConversationLastMessage(conversationId);
       recipients = participants;
+      auditLog('DELETE_MANY_MESSAGES_FOR_EVERYONE', userId, { conversationId, count: normalizedIds.length });
     } else {
       await Message.updateMany(
         { _id: { $in: normalizedIds } },

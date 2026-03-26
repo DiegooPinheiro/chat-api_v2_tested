@@ -1,6 +1,7 @@
 const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const Message = require('../models/Message');
+const { auditLog } = require('../utils/logger');
 
 const ensureSyncedUser = (req, res) => {
   if (req.user) return null;
@@ -138,6 +139,8 @@ const deleteConversation = async (req, res) => {
 
     const messagesResult = await Message.deleteMany({ conversationId: conversation._id });
     await Conversation.deleteOne({ _id: conversation._id });
+
+    auditLog('DELETE_CONVERSATION', userId, { conversationId, messagesDeleted: messagesResult?.deletedCount ?? 0 });
 
     return res.status(200).json({
       message: 'Conversa excluida com sucesso',
