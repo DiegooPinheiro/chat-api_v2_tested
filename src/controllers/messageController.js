@@ -2,6 +2,8 @@ const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const { emitToUserRoom } = require('../sockets/socketStore');
 const { auditLog } = require('../utils/logger');
+const { sanitizeText } = require('../utils/sanitizer');
+const { encrypt, decrypt } = require('../utils/crypto');
 
 const ensureSyncedUser = (req, res) => {
   if (req.user) return null;
@@ -82,7 +84,9 @@ const markConversationAsRead = async (conversationId, readerId) => {
 const sendMessage = async (req, res) => {
   if (ensureSyncedUser(req, res)) return;
 
-  const { conversationId, text, mediaUrl, mediaType } = req.body;
+  const { conversationId, mediaUrl, mediaType } = req.body;
+  const initialText = req.body?.text || '';
+  const text = sanitizeText(initialText, req.user._id);
   const senderId = req.user._id;
 
   try {
@@ -102,7 +106,7 @@ const sendMessage = async (req, res) => {
     const newMessage = new Message({
       conversationId,
       senderId,
-      text,
+      text: encrypt(text),
       mediaUrl,
       mediaType,
     });
@@ -160,7 +164,10 @@ const sendMessage = async (req, res) => {
       console.error('Erro ao processar socket/push via REST:', socketErr.message);
     }
 
-    return res.status(201).json(savedMessage);
+    const responseMessage = savedMessage.toObject();
+    responseMessage.text = text; // Retornamos o texto descriptografado para o autor
+
+    return res.status(201).json(responseMessage);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -184,7 +191,13 @@ const getMessages = async (req, res) => {
       .sort({ createdAt: 1 })
       .populate('senderId', 'nome username foto');
 
-    return res.status(200).json(messages);
+    const decryptedMessages = messages.map((m) => {
+      const obj = m.toObject();
+      if (obj.text) obj.text = decrypt(obj.text);
+      return obj;
+    });
+
+    return res.status(200).json(decryptedMessages);
   } catch (error) {
     return res.status(500).json({ message: error.message });
   }
@@ -217,7 +230,8 @@ const updateMessage = async (req, res) => {
 
   const { messageId } = req.params;
   const userId = req.user._id;
-  const nextText = String(req.body?.text || '').trim();
+  const initialText = req.body?.text || '';
+  const nextText = sanitizeText(initialText, userId);
 
   try {
     if (!nextText) {
@@ -242,7 +256,7 @@ const updateMessage = async (req, res) => {
       return res.status(400).json({ message: 'Edicao ainda disponivel apenas para mensagens de texto' });
     }
 
-    message.text = nextText;
+    message.text = encrypt(nextText);
     message.edited = true;
     await message.save();
 
@@ -278,9 +292,12 @@ const updateMessage = async (req, res) => {
       emitToUserRoom(participantId, 'message_updated', payload);
     });
 
+    const finalResponse = populatedMessage.toObject();
+    finalResponse.text = decrypt(finalResponse.text);
+
     return res.status(200).json({
       message: 'Mensagem atualizada com sucesso',
-      updatedMessage: populatedMessage,
+      updatedMessage: finalResponse,
       lastMessage,
     });
   } catch (error) {

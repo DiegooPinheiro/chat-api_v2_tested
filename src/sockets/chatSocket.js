@@ -4,6 +4,8 @@ const User = require('../models/User');
 const admin = require('../config/firebaseAdmin');
 const { setSocketServer } = require('./socketStore');
 const { markConversationAsRead } = require('../controllers/messageController');
+const { sanitizeText } = require('../utils/sanitizer');
+const { encrypt } = require('../utils/crypto');
 
 const onlineUsers = new Map();
 
@@ -118,8 +120,10 @@ const setupChatSocket = (io) => {
     });
 
     socket.on('send_message', async (data) => {
-      const { conversationId, text, receiverId, mediaUrl, mediaType, clientMessageId } = data || {};
+      const { conversationId, receiverId, mediaUrl, mediaType, clientMessageId } = data || {};
+      const initialText = data?.text || '';
       const senderId = socket.data.userId ? String(socket.data.userId) : null;
+      const text = sanitizeText(initialText, senderId);
 
       try {
         if (!senderId || !conversationId || !receiverId || (!text && !mediaUrl)) {
@@ -137,7 +141,7 @@ const setupChatSocket = (io) => {
         const newMessage = new Message({
           conversationId,
           senderId,
-          text,
+          text: encrypt(text),
           mediaUrl,
           mediaType,
         });
@@ -160,6 +164,7 @@ const setupChatSocket = (io) => {
 
         const outgoingPayload = {
           ...(typeof outgoing.toObject === 'function' ? outgoing.toObject() : outgoing),
+          text: text, // Mantemos o texto original (descriptografado) para o socket
           clientMessageId: clientMessageId || null,
         };
 
