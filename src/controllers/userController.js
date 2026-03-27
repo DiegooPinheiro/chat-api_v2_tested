@@ -1,4 +1,6 @@
 const User = require('../models/User');
+const Message = require('../models/Message');
+const Conversation = require('../models/Conversation');
 
 const ensureSyncedUser = (req, res) => {
   if (req.user) return null;
@@ -131,6 +133,44 @@ const syncContacts = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Deletar conta do usuário logado
+ * @route   DELETE /api/users/me
+ * @access  Private
+ */
+const deleteMe = async (req, res) => {
+  try {
+    const userId = req.user._id;
+
+    // 1. Remover mensagens enviadas pelo usuário
+    await Message.deleteMany({ senderId: userId });
+
+    // 2. Remover o usuário de conversas (ou deletar conversas se for o único membro)
+    // Para simplificar, vamos remover o usuário de todos os arrays de membros
+    await Conversation.updateMany(
+      { members: userId },
+      { $pull: { members: userId } }
+    );
+
+    // 3. Remover conversas vazias
+    await Conversation.deleteMany({ members: { $size: 0 } });
+
+    // 4. Remover o documento do usuário
+    await User.findByIdAndDelete(userId);
+
+    res.status(200).json({
+      success: true,
+      message: 'Conta deletada com sucesso'
+    });
+  } catch (error) {
+    res.status(500).json({
+      success: false,
+      message: 'Erro ao deletar conta',
+      error: error.message
+    });
+  }
+};
+
 module.exports = {
   listUsers,
   registerUser,
@@ -138,4 +178,5 @@ module.exports = {
   getUserProfile,
   registerPushToken,
   syncContacts,
+  deleteMe,
 };
