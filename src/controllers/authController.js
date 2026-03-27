@@ -58,6 +58,7 @@ const syncFirebaseUser = async (req, res) => {
       nome: user.nome,
       foto: user.foto,
       phone: user.phone,
+      phoneVerified: user.phoneVerified || false,
     });
   } catch (error) {
     return res.status(500).json({ message: error.message });

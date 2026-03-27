@@ -33,6 +33,10 @@ const userSchema = new mongoose.Schema({
     sparse: true,
     trim: true,
   },
+  phoneVerified: {
+    type: Boolean,
+    default: false,
+  },
   expoPushToken: {
     type: String,
     default: null,
