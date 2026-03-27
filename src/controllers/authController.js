@@ -48,10 +48,8 @@ const syncFirebaseUser = async (req, res) => {
       user.username = username;
       user.nome = nome;
       user.foto = foto;
-      if (phone) {
-        user.phone = phone;
-        if (phoneVerified) user.phoneVerified = true;
-      }
+      if (phone) user.phone = phone;
+      if (phoneVerified) user.phoneVerified = true;
       await user.save();
     }
 
