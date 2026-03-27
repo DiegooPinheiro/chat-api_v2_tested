@@ -18,11 +18,15 @@ const initializeFirebaseAdmin = () => {
   if (admin.apps.length > 0) return admin.app();
 
   if (hasInlineCredentials()) {
+    const projectId = (process.env.FIREBASE_PROJECT_ID || '').trim().replace(/^["']|["']$/g, '');
+    const clientEmail = (process.env.FIREBASE_CLIENT_EMAIL || '').trim().replace(/^["']|["']$/g, '');
+    const privateKey = getPrivateKey();
+
     return admin.initializeApp({
       credential: admin.credential.cert({
-        projectId: process.env.FIREBASE_PROJECT_ID,
-        clientEmail: process.env.FIREBASE_CLIENT_EMAIL,
-        privateKey: getPrivateKey(),
+        projectId,
+        clientEmail,
+        privateKey,
       }),
     });
   }
