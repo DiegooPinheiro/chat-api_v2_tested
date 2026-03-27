@@ -28,6 +28,7 @@ const syncFirebaseUser = async (req, res) => {
     const nome = bodyName || tokenName || 'Usuario';
     const foto = bodyPhoto || tokenPhoto || '';
     const phone = bodyPhone || '';
+    const phoneVerified = req.body?.phoneVerified === true;
 
     let user = await User.findOne({
       $or: [{ firebaseUid }, { username }],
@@ -40,13 +41,17 @@ const syncFirebaseUser = async (req, res) => {
         nome,
         foto,
         phone,
+        phoneVerified,
       });
     } else {
       user.firebaseUid = firebaseUid;
       user.username = username;
       user.nome = nome;
       user.foto = foto;
-      if (phone) user.phone = phone;
+      if (phone) {
+        user.phone = phone;
+        if (phoneVerified) user.phoneVerified = true;
+      }
       await user.save();
     }
 
