@@ -6,8 +6,7 @@ const { Resend } = require('resend');
  */
 class MailerService {
   constructor() {
-    this.resend = new Resend(process.env.RESEND_API_KEY);
-    this.fromEmail = 'Vibe Messenger <onboarding@resend.dev>'; // Usando o padrão de teste do Resend
+    this.fromEmail = 'onboarding@resend.dev'; // No modo onboarding, o Resend costuma exigir o e-mail puro
   }
 
   /**
@@ -16,13 +15,18 @@ class MailerService {
    * @param {string} code - PIN de 6 dígitos
    */
   async sendTwoStepCode(to, code) {
-    if (!process.env.RESEND_API_KEY) {
+    const apiKey = process.env.RESEND_API_KEY;
+    if (!apiKey) {
       console.warn('[MailerService] RESEND_API_KEY não configurada. Simulando envio.');
       return { success: true, simulated: true };
     }
 
+    // Inicializa o cliente na hora do envio para garantir que tenha a chave correta
+    const resend = new Resend(apiKey);
+
     try {
-      const { data, error } = await this.resend.emails.send({
+      console.log(`[MailerService] Tentando enviar e-mail para ${to} com chave que inicia com ${apiKey.substring(0, 5)}...`);
+      const { data, error } = await resend.emails.send({
         from: this.fromEmail,
         to: [to],
         subject: `${code} é o seu código de verificação`,
