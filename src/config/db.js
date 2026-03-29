@@ -14,16 +14,24 @@ const connectDB = async () => {
     console.log(`MongoDB conectado: ${conn.connection.host}`);
 
     // Limpeza de índices antigos que impedem múltiplos usuários com null (username/firebaseUid)
-    // Isso é necessário porque o MongoDB não atualiza o flag 'sparse' automaticamente.
+    // No MongoDB, índices únicos sem o flag 'sparse' barram múltiplos valores nulos.
     try {
       const users = conn.connection.collection('users');
-      await Promise.allSettled([
-        users.dropIndex('username_1'),
-        users.dropIndex('firebaseUid_1')
-      ]);
-      console.log('[DB] Índices antigos verificados/removidos para garantir suporte a SPARSE.');
+      const indexes = await users.indexes();
+      const indexNames = indexes.map(i => i.name);
+      
+      console.log(`[DB] Índices atuais: ${indexNames.join(', ')}`);
+
+      if (indexNames.includes('username_1')) {
+        await users.dropIndex('username_1');
+        console.log('[DB] Índice username_1 removido para migração SPARSE.');
+      }
+      if (indexNames.includes('firebaseUid_1')) {
+        await users.dropIndex('firebaseUid_1');
+        console.log('[DB] Índice firebaseUid_1 removido para migração SPARSE.');
+      }
     } catch (e) {
-      // Ignora se o índice não existir
+      console.error('[DB] Erro ao limpar índices:', e.message);
     }
   } catch (error) {
     console.error(`Erro ao conectar ao MongoDB: ${error.message}`);

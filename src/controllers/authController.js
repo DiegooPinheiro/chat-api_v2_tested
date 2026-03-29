@@ -1,7 +1,10 @@
 const User = require('../models/User');
 const { auditLog } = require('../utils/logger');
 
-const normalizeEmail = (value) => String(value || '').trim().toLowerCase();
+const normalizeEmail = (value) => {
+  const email = String(value || '').trim().toLowerCase();
+  return email === '' ? null : email;
+};
 const normalizeName = (value) => String(value || '').trim();
 
 const syncFirebaseUser = async (req, res) => {
