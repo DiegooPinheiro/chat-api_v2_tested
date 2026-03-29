@@ -11,11 +11,18 @@ const protect = async (req, res, next) => {
   try {
     const token = authHeader.split(' ')[1];
     const decoded = await admin.auth().verifyIdToken(token);
-    const email = String(decoded.email || '').trim().toLowerCase();
+    const email = decoded.email ? String(decoded.email).trim().toLowerCase() : null;
 
     req.firebaseUser = decoded;
+    
+    // Busca preferencialmente pelo UID, e secundariamente pelo e-mail se existir
+    const searchConditions = [{ firebaseUid: decoded.uid }];
+    if (email) {
+      searchConditions.push({ username: email });
+    }
+
     req.user = await User.findOne({
-      $or: [{ firebaseUid: decoded.uid }, ...(email ? [{ username: email }] : [])],
+      $or: searchConditions,
     }).select('-password');
 
     return next();

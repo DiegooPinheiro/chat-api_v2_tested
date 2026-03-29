@@ -10,8 +10,9 @@ const userSchema = new mongoose.Schema({
   },
   username: {
     type: String,
-    required: [true, 'Username e obrigatorio'],
+    required: false,
     unique: true,
+    sparse: true,
     trim: true,
     lowercase: true,
   },

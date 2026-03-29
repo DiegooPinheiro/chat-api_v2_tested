@@ -11,8 +11,8 @@ const syncFirebaseUser = async (req, res) => {
     const tokenName = normalizeName(req.firebaseUser?.name);
     const tokenPhoto = String(req.firebaseUser?.picture || '').trim();
 
-    if (!firebaseUid || !tokenEmail) {
-      return res.status(400).json({ message: 'Token Firebase sem uid/email validos.' });
+    if (!firebaseUid) {
+      return res.status(400).json({ message: 'Token Firebase sem UID valido.' });
     }
 
     const bodyEmail = normalizeEmail(req.body?.email);
@@ -20,19 +20,24 @@ const syncFirebaseUser = async (req, res) => {
     const bodyPhoto = String(req.body?.photoURL || '').trim();
     const bodyPhone = String(req.body?.phone || '').replace(/\D/g, '').trim();
 
-    if (bodyEmail && bodyEmail !== tokenEmail) {
+    if (bodyEmail && tokenEmail && bodyEmail !== tokenEmail) {
       return res.status(400).json({ message: 'Email incompativel com o token Firebase.' });
     }
 
-    const username = tokenEmail;
+    // Se tiver email no token ou no body, usamos como username principal
+    const username = tokenEmail || bodyEmail || undefined;
     const nome = bodyName || tokenName || 'Usuario';
     const foto = bodyPhoto || tokenPhoto || '';
     const phone = bodyPhone || '';
     const phoneVerified = req.body?.phoneVerified === true;
 
-    let user = await User.findOne({
-      $or: [{ firebaseUid }, { username }],
-    }).select('-password');
+    // Busca preferencialmente pelo firebaseUid
+    let user = await User.findOne({ firebaseUid }).select('-password');
+
+    // Se não achar pelo UID mas tiver username, tenta pelo username
+    if (!user && username) {
+      user = await User.findOne({ username }).select('-password');
+    }
 
     if (!user) {
       user = await User.create({
@@ -45,7 +50,7 @@ const syncFirebaseUser = async (req, res) => {
       });
     } else {
       user.firebaseUid = firebaseUid;
-      user.username = username;
+      if (username) user.username = username;
       user.nome = nome;
       user.foto = foto;
       if (phone) user.phone = phone;
