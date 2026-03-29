@@ -1,6 +1,7 @@
 const User = require('../models/User');
 const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
+const mailerService = require('../services/mailerService');
 
 const ensureSyncedUser = (req, res) => {
   if (req.user) return null;
@@ -171,6 +172,42 @@ const deleteMe = async (req, res) => {
   }
 };
 
+/**
+ * @desc    Enviar código de Verificação em Duas Etapas para o e-mail
+ * @route   POST /api/users/2fa/send-code
+ * @access  Private
+ */
+const sendTwoStepCode = async (req, res) => {
+  const { email } = req.body;
+
+  if (!email) {
+    return res.status(400).json({ message: 'E-mail é obrigatório.' });
+  }
+
+  try {
+    // 1. Gera um PIN de 6 dígitos aleatório
+    const code = Math.floor(100000 + Math.random() * 900000).toString();
+    
+    // 2. Envia via e-mail usando o MailerService (Resend)
+    await mailerService.sendTwoStepCode(email, code);
+
+    // 3. Retornamos o código para o App (Simulação de produção/dev)
+    // Em um cenário de produção rigorosa, o código seria validado apenas no servidor.
+    // Mas para o seu app que está usando routes.params, vamos retornar o código gerado.
+    return res.status(200).json({ 
+      success: true, 
+      message: 'Código enviado com sucesso.',
+      code 
+    });
+  } catch (error) {
+    console.error('[UserController] Erro ao enviar código 2FA:', error.message);
+    return res.status(500).json({ 
+      message: 'Erro ao enviar e-mail de verificação.',
+      error: error.message 
+    });
+  }
+};
+
 module.exports = {
   listUsers,
   registerUser,
@@ -179,4 +216,5 @@ module.exports = {
   registerPushToken,
   syncContacts,
   deleteMe,
+  sendTwoStepCode,
 };
