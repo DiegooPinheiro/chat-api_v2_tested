@@ -1,642 +1,119 @@
-# Documentacao da API de Chat
+# 🚀 Chat API V2 - Documentação Completa do Backend
 
-Esta documentacao descreve a API REST e o fluxo de tempo real da Chat API com Node.js, Express, MongoDB, Socket.IO e Firebase Authentication.
-
-## 1. Visao geral
-
-A API oferece:
-
-- autenticacao baseada em Firebase ID Token
-- sincronizacao de usuarios no MongoDB
-- conversas privadas
-- envio de mensagens de texto e midia
-- socket em tempo real
-- status de mensagem com leitura (`read`)
-- **Sanitização de Mensagens (XSS Protection)**
-- **Criptografia AES-256 das mensagens em repouso**
-- **Logs de Auditoria de Ações Importantes**
-
-## 2. Estrutura do projeto
-
-```text
-chat-api_v2_tested/
-├── src/
-│   ├── config/
-│   │   ├── db.js
-│   │   └── firebaseAdmin.js
-│   ├── controllers/
-│   │   ├── authController.js
-│   │   ├── conversationController.js
-│   │   ├── mediaController.js
-│   │   ├── messageController.js
-│   │   └── userController.js
-│   ├── middlewares/
-│   │   └── auth.js
-│   ├── models/
-│   │   ├── Conversation.js
-│   │   ├── Message.js
-│   │   └── User.js
-│   ├── routes/
-│   │   ├── authRoutes.js
-│   │   ├── conversationRoutes.js
-│   │   ├── mediaRoutes.js
-│   │   ├── messageRoutes.js
-│   │   └── userRoutes.js
-│   ├── sockets/
-│   │   ├── chatSocket.js
-│   │   └── socketStore.js
-│   ├── app.js
-│   └── index.js
-├── uploads/
-├── .env
-└── API_DOCUMENTATION.md
-```
-
-## 3. Modelos de dados
-
-### 3.1. User
-
-Representa um usuario sincronizado na Chat API.
-
-| Campo | Tipo | Descricao |
-| --- | --- | --- |
-| `_id` | `ObjectId` | ID interno do MongoDB |
-| `username` | `String` | Email/login do usuario |
-| `nome` | `String` | Nome exibido |
-| `foto` | `String` | URL da foto de perfil |
-| `firebaseUid` | `String` | UID do Firebase vinculado ao usuario |
-| `createdAt` | `Date` | Criacao |
-| `updatedAt` | `Date` | Atualizacao |
-
-### 3.2. Conversation
-
-Representa uma conversa privada.
-
-| Campo | Tipo | Descricao |
-| --- | --- | --- |
-| `_id` | `ObjectId` | ID da conversa |
-| `participants` | `ObjectId[]` | Participantes da conversa |
-| `lastMessage.text` | `String` | Ultimo texto ou resumo da ultima mensagem |
-| `lastMessage.senderId` | `ObjectId` | Remetente da ultima mensagem |
-| `lastMessage.createdAt` | `Date` | Data da ultima mensagem |
-| `createdAt` | `Date` | Criacao |
-| `updatedAt` | `Date` | Atualizacao |
-
-### 3.3. Message
-
-Representa uma mensagem de chat.
-
-| Campo | Tipo | Descricao |
-| --- | --- | --- |
-| `_id` | `ObjectId` | ID da mensagem |
-| `conversationId` | `ObjectId` | Conversa a que pertence |
-| `senderId` | `ObjectId` | Usuario remetente |
-| `text` | `String` | Texto da mensagem |
-| `mediaUrl` | `String` | URL da midia enviada |
-| `mediaType` | `String` | `image`, `video`, `audio`, `document`, `file` ou `null` |
-| `read` | `Boolean` | Se a mensagem ja foi lida pelo destinatario |
-| `createdAt` | `Date` | Criacao |
-| `updatedAt` | `Date` | Atualizacao |
-
-## 4. Autenticacao
-
-A API usa Firebase Authentication.
-
-Fluxo:
-
-1. O cliente autentica o usuario no Firebase.
-2. O cliente pega o `Firebase ID Token`.
-3. O cliente envia `Authorization: Bearer <firebase_id_token>`.
-4. A API valida o token com `firebase-admin`.
-5. A API usa o usuario sincronizado no MongoDB para autorizar os recursos.
-
-O socket tambem usa o token do Firebase no handshake:
-
-```js
-const socket = io(BASE_URL, {
-  auth: {
-    token: firebaseIdToken,
-  },
-});
-```
-
-## 5. Endpoints REST
-
-Todos os endpoints protegidos exigem `Authorization: Bearer <firebase_id_token>`.
-
-### 5.1. Auth
-
-#### `POST /api/auth/firebase`
-
-Sincroniza o usuario autenticado no Firebase com o MongoDB da Chat API.
-
-Corpo:
-
-```json
-{
-  "email": "usuario@email.com",
-  "displayName": "Nome do Usuario",
-  "photoURL": "https://example.com/avatar.jpg"
-}
-```
-
-Resposta:
-
-```json
-{
-  "_id": "65f1234567890abcdef1234",
-  "username": "usuario@email.com",
-  "nome": "Nome do Usuario",
-  "foto": "https://example.com/avatar.jpg"
-}
-```
-
-### 5.2. Users
-
-#### `GET /api/users`
-
-Lista usuarios sincronizados.
-
-Query opcional:
-
-- `q`: termo de busca
-
-Exemplo:
-
-```http
-GET /api/users?q=diego
-```
-
-#### `POST /api/users`
-
-Cadastro por senha desativado. Mantido apenas por compatibilidade.
-
-#### `POST /api/users/login`
-
-Login por senha desativado. Mantido apenas por compatibilidade.
-
-### 5.3. Conversations
-
-#### `POST /api/conversations`
-
-Cria ou recupera uma conversa privada.
-
-Corpo:
-
-```json
-{
-  "participantId": "65f1234567890abcdef9999"
-}
-```
-
-#### `GET /api/conversations/:userId`
-
-Lista as conversas do usuario autenticado.
-
-#### `DELETE /api/conversations/:conversationId`
-
-Exclui a conversa e as mensagens associadas.
-
-### 5.4. Messages
-
-#### `POST /api/messages`
-
-Envia mensagem por REST.
-
-Corpo:
-
-```json
-{
-  "conversationId": "65f1234567890abcdef5555",
-  "text": "Ola, tudo bem?",
-  "mediaUrl": null,
-  "mediaType": null
-}
-```
-
-Resposta:
-
-```json
-{
-  "_id": "65f1234567890abcdef7777",
-  "conversationId": "65f1234567890abcdef5555",
-  "senderId": "65f1234567890abcdef1111",
-  "text": "Ola, tudo bem?",
-  "mediaUrl": null,
-  "mediaType": null,
-  "read": false,
-  "createdAt": "2026-03-21T21:10:00.000Z",
-  "updatedAt": "2026-03-21T21:10:00.000Z"
-}
-```
-
-#### `GET /api/messages/:conversationId`
-
-Lista as mensagens da conversa em ordem crescente.
-
-Importante:
-
-- ao abrir a conversa, a API marca como lidas as mensagens recebidas pelo usuario autenticado
-- quando isso acontece, a API emite `messages_read` para o remetente via socket
-
-Resposta:
-
-```json
-[
-  {
-    "_id": "65f1234567890abcdef7777",
-    "conversationId": "65f1234567890abcdef5555",
-    "senderId": {
-      "_id": "65f1234567890abcdef1111",
-      "nome": "Diego",
-      "username": "diego@email.com",
-      "foto": "https://example.com/avatar.jpg"
-    },
-    "text": "Ola, tudo bem?",
-    "mediaUrl": null,
-    "mediaType": null,
-    "read": true,
-    "createdAt": "2026-03-21T21:10:00.000Z",
-    "updatedAt": "2026-03-21T21:12:00.000Z"
-  }
-]
-```
-
-#### `POST /api/messages/:conversationId/read`
-
-Marca como lidas as mensagens da conversa cujo remetente seja outro usuario.
-
-Resposta:
-
-```json
-{
-  "message": "Mensagens marcadas como lidas",
-  "modifiedCount": 2,
-  "messageIds": [
-    "65f1234567890abcdef7777",
-    "65f1234567890abcdef8888"
-  ]
-}
-```
-
-#### `DELETE /api/messages/:messageId`
-
-Apaga uma mensagem especifica e recalcula o `lastMessage` da conversa.
-
-Query/body opcional:
-
-- `deleteForEveryone`: boolean
-
-Resposta:
-
-```json
-{
-  "message": "Mensagem apagada com sucesso",
-  "conversationId": "65f1234567890abcdef5555",
-  "messageIds": [
-    "65f1234567890abcdef7777"
-  ],
-  "deletedBy": "65f1234567890abcdef1111",
-  "deleteForEveryone": true,
-  "lastMessage": {
-    "text": "Mensagem anterior",
-    "senderId": "65f1234567890abcdef2222",
-    "createdAt": "2026-03-21T21:00:00.000Z"
-  }
-}
-```
-
-#### `POST /api/messages/delete-many`
-
-Apaga varias mensagens de uma unica conversa.
-
-Corpo:
-
-```json
-{
-  "messageIds": [
-    "65f1234567890abcdef7777",
-    "65f1234567890abcdef8888"
-  ],
-  "deleteForEveryone": true
-}
-```
-
-Resposta:
-
-```json
-{
-  "message": "Mensagens apagadas com sucesso",
-  "deletedCount": 2,
-  "conversationId": "65f1234567890abcdef5555",
-  "messageIds": [
-    "65f1234567890abcdef7777",
-    "65f1234567890abcdef8888"
-  ],
-  "deletedBy": "65f1234567890abcdef1111",
-  "deleteForEveryone": true,
-  "lastMessage": {
-    "text": "Mensagem anterior",
-    "senderId": "65f1234567890abcdef2222",
-    "createdAt": "2026-03-21T21:00:00.000Z"
-  }
-}
-```
-
-### 5.5. Media
-
-#### `POST /api/media/upload` (DEPRECADO)
-
-> ⚠️ **Aviso:** Este endpoint foi descontinuado devido ao disco efêmero do Render gratuito apagar os arquivos a cada restart.
-> 
-> **Novo Fluxo:** O App Mobile agora faz o upload dos arquivos diretamente para o **Cloudinary** e envia apenas a `mediaUrl` permanente gerada para a API através dos endpoints de mensagem (`POST /api/messages` ou socket `send_message`). A API atua apenas como ponte.
-
-## 6. Socket.IO
-
-### 6.1. Autenticacao
-
-O socket so conecta se o cliente enviar o `firebase_id_token` no handshake:
-
-```js
-const socket = io(BASE_URL, {
-  transports: ['websocket'],
-  auth: {
-    token: firebaseIdToken,
-  },
-});
-```
-
-### 6.2. Eventos do cliente para o servidor
-
-#### `connect_user`
-
-Evento opcional de compatibilidade. A autenticacao real ja foi feita no handshake.
-
-#### `send_message`
-
-Payload:
-
-```json
-{
-  "conversationId": "65f1234567890abcdef5555",
-  "senderId": "65f1234567890abcdef1111",
-  "receiverId": "65f1234567890abcdef2222",
-  "text": "Mensagem em tempo real",
-  "mediaUrl": null,
-  "mediaType": null
-}
-```
-
-Efeito:
-
-- salva a mensagem
-- atualiza `lastMessage` na conversa
-- emite `receive_message` para remetente e destinatario
-
-#### `typing`
-
-Envia indicador de digitacao.
-
-#### `stop_typing`
-
-Envia parada de digitacao.
-
-#### `typing_status`
-
-Alias adicional de digitacao.
-
-#### `typingStatus`
-
-Alias adicional de digitacao.
-
-#### `mark_messages_read`
-
-Marca mensagens da conversa como lidas.
-
-Payload:
-
-```json
-{
-  "conversationId": "65f1234567890abcdef5555"
-}
-```
-
-### 6.2.1. Observacao sobre remocao
-
-Atualmente a API remove a mensagem do banco de forma real. O campo `deleteForEveryone` ja e aceito para compatibilidade com o app, mas como o backend ainda nao possui um modelo separado de "apagar so para mim", a remocao efetiva continua apagando a mensagem da conversa persistida.
-
-Ack de sucesso:
-
-```json
-{
-  "ok": true,
-  "modifiedCount": 2,
-  "messageIds": [
-    "65f1234567890abcdef7777",
-    "65f1234567890abcdef8888"
-  ]
-}
-```
-
-### 6.3. Eventos do servidor para o cliente
-
-#### `user_connected`
-
-Emitido quando o socket do usuario autentica e entra na room dele.
-
-#### `receive_message`
-
-Emitido quando uma nova mensagem e recebida/sincronizada.
-
-Exemplo:
-
-```json
-{
-  "_id": "65f1234567890abcdef7777",
-  "conversationId": "65f1234567890abcdef5555",
-  "senderId": "65f1234567890abcdef1111",
-  "text": "Mensagem em tempo real",
-  "mediaUrl": null,
-  "mediaType": null,
-  "read": false,
-  "createdAt": "2026-03-21T21:10:00.000Z",
-  "updatedAt": "2026-03-21T21:10:00.000Z"
-}
-```
-
-#### `messages_read`
-
-Emitido para o remetente quando o outro participante le a conversa.
-
-Payload:
-
-```json
-{
-  "conversationId": "65f1234567890abcdef5555",
-  "readerId": "65f1234567890abcdef2222",
-  "messageIds": [
-    "65f1234567890abcdef7777",
-    "65f1234567890abcdef8888"
-  ],
-  "read": true
-}
-```
-
-#### `messages_deleted`
-
-Emitido para os participantes quando uma ou mais mensagens sao apagadas.
-
-Payload:
-
-```json
-{
-  "conversationId": "65f1234567890abcdef5555",
-  "messageIds": [
-    "65f1234567890abcdef7777",
-    "65f1234567890abcdef8888"
-  ],
-  "deletedBy": "65f1234567890abcdef1111",
-  "deleteForEveryone": true,
-  "lastMessage": {
-    "text": "Mensagem anterior",
-    "senderId": "65f1234567890abcdef2222",
-    "createdAt": "2026-03-21T21:00:00.000Z"
-  }
-}
-```
-
-#### `typing`
-
-#### `stop_typing`
-
-#### `typing_status`
-
-#### `typingStatus`
-
-Eventos de digitacao retransmitidos ao outro usuario.
-
-## 7. Status de mensagem no cliente
-
-Fluxo visual esperado no app:
-
-- `sent`: 1 check
-- `delivered`: 2 checks
-- `read`: 2 checks coloridos
-
-Importante:
-
-- a API persiste apenas `read`
-- `sent` e `delivered` podem ser controlados pelo frontend com envio otimista + confirmacao por `receive_message`
-- `read` depende do backend emitir `messages_read` ou devolver a mensagem ja com `read: true`
-
-## 8. Exemplo de fluxo completo
-
-1. Usuario faz login no Firebase.
-2. Cliente chama `POST /api/auth/firebase`.
-3. Cliente conecta no Socket.IO com `auth.token`.
-4. Usuario A envia `send_message`.
-5. API salva e emite `receive_message` para A e B.
-6. Usuario B abre a conversa.
-7. API marca as mensagens como `read: true`.
-8. API emite `messages_read` para A.
-9. App de A muda o status visual para lido.
-
-Fluxo de apagado:
-
-1. Usuario seleciona uma ou mais mensagens no app.
-2. Cliente chama `POST /api/messages/delete-many`.
-3. API apaga as mensagens no MongoDB.
-4. API recalcula o `lastMessage` da conversa.
-5. API emite `messages_deleted` para os participantes.
-6. Os clientes removem as mensagens da UI e atualizam a lista de conversas.
-
-## 9. Observacoes de seguranca
-
-- nao use senha propria da Chat API como auth principal
-- nao confie em `senderId` vindo do cliente sem validar o usuario autenticado
-- use sempre o usuario autenticado a partir do token Firebase
-- o Socket.IO deve ser autenticado no handshake
-- **Criptografia:** O segredo `ENCRYPTION_KEY` deve ser de 32 caracteres.
-- **Deleção:** Apenas o autor original pode deletar para todos (`deleteForEveryone`).
-- **Sanitização:** Todas as mensagens são limpas automaticamente para remover tags HTML/Scripts.
-
-## 10. Validacao local
-
-Arquivos principais do fluxo:
-
-- `src/config/firebaseAdmin.js`
-- `src/middlewares/auth.js`
-- `src/controllers/authController.js`
-- `src/controllers/messageController.js`
-- `src/routes/messageRoutes.js`
-- `src/sockets/chatSocket.js`
-- `src/sockets/socketStore.js`
-
-Exemplo de teste simples:
-
-```bash
-node -e "require('./src/controllers/messageController'); require('./src/sockets/chatSocket'); require('./src/app'); console.log('ok')"
-```
-
-## 11. Deploy no Render
-
-Para o deploy funcionar corretamente no Render, configure as variaveis de ambiente do servico.
-
-### 11.1. Variaveis obrigatorias
-
-- `PORT`
-- `MONGO_URI`
-- `FIREBASE_PROJECT_ID`
-- `FIREBASE_CLIENT_EMAIL`
-- `FIREBASE_PRIVATE_KEY`
-
-Exemplo:
-
-```env
-PORT=3000
-MONGO_URI=mongodb+srv://usuario:senha@cluster.mongodb.net/chat
-FIREBASE_PROJECT_ID=telegram-clone-32b5c
-FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@telegram-clone-32b5c.iam.gserviceaccount.com
-FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nSUA_CHAVE_AQUI\n-----END PRIVATE KEY-----\n"
-```
-
-### 11.2. Variaveis opcionais
-
-- `CORS_ORIGIN`
-- `SOCKET_POPULATE`
-- `DEBUG_SOCKET`
-
-### 11.3. Onde configurar no Render
-
-No painel do Render:
-
-1. Abra o Web Service da API
-2. Entre em `Environment`
-3. Adicione cada variavel em `Environment Variables`
-4. Salve as alteracoes
-5. Rode um novo deploy
-
-### 11.4. Observacoes importantes
-
-- `FIREBASE_PRIVATE_KEY` deve ficar com `\n` escapado dentro da string
-- nunca coloque essas credenciais no app mobile
-- essas credenciais sao apenas do backend
-- mantenha `.env` fora do Git
-- se usar `pnpm`, mantenha o `pnpm-lock.yaml` sincronizado para evitar falha com `--frozen-lockfile`
-
-### 11.5. Checklist rapido de producao
-
-- Firebase Admin configurado
-- MongoDB acessivel pelo Render
-- CORS apontando para o frontend correto
-- rota `POST /api/auth/firebase` funcionando
-- socket autenticando com token Firebase
-- evento `messages_read` chegando no cliente
-- endpoint de delecao de mensagens respondendo
-- evento `messages_deleted` chegando no cliente
-- deploy mais recente com lockfile atualizado
-- **Cloudinary:** Certifique-se de que o App envia a URL permanente do Cloudinary em `mediaUrl`.
+Esta é a API central de comunicações do aplicativo **Vibe**. Ela orquestra a lógica de tempo real, persistência em bancos de dados baseados em documentos, verificação de criptografia de pontes, disparos automatizados de mensageria 2FA e cache para performance.
 
 ---
 
-Atualizado em 23 de marco de 2026.
+## 📖 Índice
+1. [Visão Geral](#1-visão-geral)
+2. [O Fator "Performance Extrema" (Redis)](#2-o-fator-performance-extrema-redis)
+3. [Segurança e Criptografia](#3-segurança-e-criptografia)
+4. [Estrutura do Banco de Dados (Modelos)](#4-estrutura-do-banco-de-dados-modelos)
+5. [Dicionário de Endpoints REST](#5-dicionário-de-endpoints-rest)
+6. [Catálogo Socket.io (Tempo Real)](#6-catálogo-socketio-tempo-real)
+7. [Iniciação Rápida e Variáveis de Ambiente](#7-iniciação-rápida-e-variáveis-de-ambiente)
+
+---
+
+## 1. Visão Geral
+Este backend é isolado e gerencia toda a regra de negócios que não pode (ou não deve) viver no lado do cliente. Construído sobre `Node.js` usando `Express`, e orquestrado primordialmente por **Tokens Assinados do Firebase**, ele só responde a requisições de origem provada.
+
+Foi desenhado usando a **Arquitetura de Controladores e Serviços**, que torna muito mais fácil debugar qualquer erro ou integrar novos serviços como Mailers (`Resend`).
+
+---
+
+## 2. O Fator "Performance Extrema" (Redis)
+Ao lidar com chats, listar conversas é o evento que gera mais impacto e atrito com bancos Mongoose (gerando agregações custosas para varrer o número de mensagens não lidas, separar última mensagem, etc.). 
+
+Para resolver a latência (conhecida como problema de I/O em banco físico), aplicamos o **Redis Labs In-Memory Data Store**.
+
+*   **Padrão Utilizado:** `Cache-Aside Pattern`.
+*   **Ação:** Um Middleware próprio (`src/middlewares/cache.js`) inspeciona todo tráfego de leitura. Se a requisição `GET /api/conversations/123` tem registro no Redis, ele serve e a requisição finaliza na hora.
+*   **Invalidação Inteligente (TTL e Programática):** As salas de grupos expiram após 60s organicamente; Mas se um usuário enviar mensagem agora, no mesmo milissegundo a ação aciona um `clearCache(userId)` nos Controllers limpando o cache sujo para garantir que dados novos estejam no banco imediatamente para qualquer parceiro de chat.
+
+---
+
+## 3. Segurança e Criptografia
+
+*   **REST Protegido:** Nenhuma rota na pasta `src/routes/*` está nua. O middleware `protect` intercepta todas as chamadas verificando os Tokens JWT nativos do Google/Firebase via `firebase-admin`. Sem Token Vivo = Resposta HTTP `401 Unauthorized`.
+*   **Mensagens em Repouso (Encryption At Rest):** Os textos salvos de cada mensagem enviada, antes de dar `message.save()`, passam por `encrypt(text)` via o algoritmo interno `AES-256-CTR` com IV Aleatorizado. Se alguém roubar credenciais do MongoDB, lerá uma bagunça de bytes, não os segredos de chat.
+
+---
+
+## 4. Estrutura do Banco de Dados (Modelos)
+Empregamos MongoDB/Mongoose. Principais Modelos na pasta `src/models`:
+
+1.  **User Schema:**
+    *   Um Proxy Local do Perfil. Replicamos o nome, username único e avatar do Firebase pra dentro de nosso BD local porque o Mongo não pode relatar com o Firebase em Operador Join Custo/Benefício.
+2.  **Conversation Schema:**
+    *   `participants: [ObjectId_List]`: Controla quem entra no chat. Subdivide o conceito para `Grupos` ativando o bit estático `isGroup`.
+    *   `groupAdmin: ObjectId`: Chefe controlador quando em Grupo.
+    *   `lastMessage: Object`: Objeto auxiliar gravando nome de quem gravou na última iteração, evitando joins violentos ao mostrar a lista de conversas.
+3.  **Message Schema:**
+    *   `conversationId`, `senderId`, `text` (Enctryptado), `mediaUrl`, `mediaType` (image, document, audio).
+    *   `hiddenFor: [ObjectId_List]`: Exclusão soft (Permite deletar pra mim mesmo mas não pra todos).
+
+---
+
+## 5. Dicionário de Endpoints REST
+
+| Mét | Rota | Descrição Técnica (Efeito na API) | Middleware / Auth |
+| :---: | --- | --- | :---: |
+| POST | `/api/auth/firebase` | Cadastra usuário do front-end na API ou Sincroniza foto nova. | Necessário |
+| POST | `/api/users/2fa/send-code` | Invoca a API de Mailer Resend usando `RESEND_API` para Auth Secundo. | Necessário |
+| POST | `/api/conversations/groups` | Gera um Grupo injetando Múltiplos UIDs, salvando `isGroup` flag. | Necessário |
+| GET | `/api/conversations/:uid` | Traz Aglomeração MongoDB + Socket status online (Usa Redis). | Necessário |
+| POST | `/api/messages` | Salva o payload rest, criptografa, varre a room do WebSockets. | Necessário |
+| DELETE| `/api/messages/delete-many` | Suporta Soft Delete com `deleteForEveryone` flags atuando Array Push. | Necessário |
+
+---
+
+## 6. Catálogo Socket.io (Tempo Real)
+
+A magia do tempo real só se aplica na camada ativa onde os aparelhos dos usuários estão ligados na tomada.
+
+### Handshake:
+Nenhuma conexão é tolerada na raiz sem Payload Auth Token Firebase no Header.
+
+### Eventos Que A API "Ouve" do Cliente:
+*   `send_message(payload)`: Faz todo trabalho do Router Message POST só que em tempo real. Dispara notificação push (`expoPushService`) local e atualiza o MongoDB.
+*   `typing`: Varre participante Oposto para apresentar o Toast visual na tela dele.
+*   `mark_messages_read`: Quando um abridor de tela entra na sala, esse evento percorre o BD inteiro setando a flag `read: true`. Notifica o rementente.
+
+### Eventos Que A API "Grita" para o Cliente:
+*   `receive_message`: "Sua mensagem chegou!".
+*   `messages_read`: "O usuário DoOutroLado viu. Exiba 2 checks azuis v2".
+*   `messages_deleted`: Requer deleção da tela imediata na UI.
+
+---
+
+## 7. Iniciação Rápida e Variáveis de Ambiente
+
+### .env Obrigatório
+Crie as chaves na pasta raiz do server.
+
+```env
+PORT=3000
+# Database Connectors Core
+MONGO_URI=mongodb+srv://... (Crie na Cloud Atlas)
+REDIS_URL=redis://default:... (Instancia do Cloud Redis)
+
+# Firebase Keys (O JSON do Service Account dissecado:)
+FIREBASE_PROJECT_ID=teu_projeto-10111
+FIREBASE_CLIENT_EMAIL=admin-sdk-2x....
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nTeu_Chavao...\n-----END PRIVATE KEY-----\n"
+
+# API Extras Control
+ENCRYPTION_KEY=Sua_Chave32BytesParaMensagensSeguras123
+RESEND_API_KEY=re_Qxxxxx...
+SOCKET_POPULATE=1
+```
+
+### Instalação e Servidor de Dev:
+O projeto usa `pnpm`, mas tolera `npm`.
+
+1. `npm install`
+2. `npm run dev` (Inicia Nodemon monitorando modificações. Socket.io sobe junto na Porta Principal 3000 atrelado ao app Server HTTP nativo).
+
+---
+*Fim da documentação unificada backend. Atividade Vibe Chat.*
