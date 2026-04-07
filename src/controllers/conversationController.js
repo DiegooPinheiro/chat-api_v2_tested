@@ -1,8 +1,9 @@
-const Conversation = require('../models/Conversation');
+﻿const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const { auditLog } = require('../utils/logger');
 const { decrypt } = require('../utils/crypto');
+const { clearCache } = require('../middlewares/cache');
 
 const ensureSyncedUser = (req, res) => {
   if (req.user) return null;
@@ -39,6 +40,8 @@ const createConversation = async (req, res) => {
     });
 
     const savedConversation = await newConversation.save();
+    await clearCache("cache:/api/conversations/*");
+    await clearCache("cache:/api/conversations/*");
     return res.status(201).json(savedConversation);
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -60,7 +63,7 @@ const createGroup = async (req, res) => {
       return res.status(400).json({ message: 'Nome do grupo e obrigatorio (min. 3 caracteres)' });
     }
 
-    // Adiciona o criador aos participantes se não estiver lá
+    // Adiciona o criador aos participantes se nÃ£o estiver lÃ¡
     const allParticipants = [...new Set([...participantIds, String(adminId)])];
 
     const newGroup = new Conversation({
@@ -79,6 +82,7 @@ const createGroup = async (req, res) => {
       participantCount: allParticipants.length 
     });
 
+    for (const pId of allParticipants) { await clearCache("cache:/api/conversations/13700*"); }
     return res.status(201).json(savedGroup);
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -232,3 +236,4 @@ module.exports = {
   getConversationById,
   deleteConversation,
 };
+

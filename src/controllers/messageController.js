@@ -1,9 +1,10 @@
-const Message = require('../models/Message');
+﻿const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const { emitToUserRoom } = require('../sockets/socketStore');
 const { auditLog } = require('../utils/logger');
 const { sanitizeText } = require('../utils/sanitizer');
 const { encrypt, decrypt } = require('../utils/crypto');
+const { clearCache } = require('../middlewares/cache');
 
 const ensureSyncedUser = (req, res) => {
   if (req.user) return null;
@@ -149,7 +150,7 @@ const sendMessage = async (req, res) => {
             if (receiver && receiver.expoPushToken) {
               const { sendPushNotification } = require('../services/expoPushService');
               const sender = req.user;
-              const pushBody = text ? text : (mediaUrl ? `📸 Arquivo de midia` : 'Nova mensagem');
+              const pushBody = text ? text : (mediaUrl ? `ðŸ“¸ Arquivo de midia` : 'Nova mensagem');
               
               sendPushNotification(receiver.expoPushToken, {
                 title: sender.nome || 'Nova mensagem',
@@ -167,6 +168,7 @@ const sendMessage = async (req, res) => {
     const responseMessage = savedMessage.toObject();
     responseMessage.text = text; // Retornamos o texto descriptografado para o autor
 
+    await clearCache("cache:/api/messages/*");
     return res.status(201).json(responseMessage);
   } catch (error) {
     return res.status(500).json({ message: error.message });
@@ -216,6 +218,9 @@ const markMessagesAsRead = async (req, res) => {
     }
 
     const result = await markConversationAsRead(conversationId, userId);
+    await clearCache("cache:/api/messages/*");
+    await clearCache("cache:/api/messages/*");
+    await clearCache("cache:/api/messages/*");
     return res.status(200).json({
       message: 'Mensagens marcadas como lidas',
       ...result,
@@ -295,6 +300,9 @@ const updateMessage = async (req, res) => {
     const finalResponse = populatedMessage.toObject();
     finalResponse.text = decrypt(finalResponse.text);
 
+    await clearCache("cache:/api/messages/*");
+    await clearCache("cache:/api/messages/*");
+    await clearCache("cache:/api/messages/*");
     return res.status(200).json({
       message: 'Mensagem atualizada com sucesso',
       updatedMessage: finalResponse,
@@ -356,6 +364,9 @@ const deleteMessage = async (req, res) => {
       emitToUserRoom(participantId, 'messages_deleted', payload);
     });
 
+    await clearCache("cache:/api/messages/*");
+    await clearCache("cache:/api/messages/*");
+    await clearCache("cache:/api/messages/*");
     return res.status(200).json({
       message: 'Mensagem apagada com sucesso',
       ...payload,
@@ -427,6 +438,9 @@ const deleteManyMessages = async (req, res) => {
       emitToUserRoom(participantId, 'messages_deleted', payload);
     });
 
+    await clearCache("cache:/api/messages/*");
+    await clearCache("cache:/api/messages/*");
+    await clearCache("cache:/api/messages/*");
     return res.status(200).json({
       message: 'Mensagens apagadas com sucesso',
       deletedCount: normalizedIds.length,
@@ -447,3 +461,4 @@ module.exports = {
   deleteManyMessages,
   syncConversationLastMessage,
 };
+
