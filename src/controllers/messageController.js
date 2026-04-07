@@ -1,4 +1,4 @@
-﻿const Message = require('../models/Message');
+const Message = require('../models/Message');
 const Conversation = require('../models/Conversation');
 const { emitToUserRoom } = require('../sockets/socketStore');
 const { auditLog } = require('../utils/logger');
@@ -171,7 +171,8 @@ const sendMessage = async (req, res) => {
     await clearCache("cache:/api/messages/*");
     return res.status(201).json(responseMessage);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[Error] falha generalizada:', error);
+    return res.status(500).json({ message: 'Falha interna no servidor.' });
   }
 };
 
@@ -201,7 +202,8 @@ const getMessages = async (req, res) => {
 
     return res.status(200).json(decryptedMessages);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[Error] falha generalizada:', error);
+    return res.status(500).json({ message: 'Falha interna no servidor.' });
   }
 };
 
@@ -226,7 +228,8 @@ const markMessagesAsRead = async (req, res) => {
       ...result,
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[Error] falha generalizada:', error);
+    return res.status(500).json({ message: 'Falha interna no servidor.' });
   }
 };
 
@@ -309,7 +312,8 @@ const updateMessage = async (req, res) => {
       lastMessage,
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[Error] falha generalizada:', error);
+    return res.status(500).json({ message: 'Falha interna no servidor.' });
   }
 };
 
@@ -372,7 +376,8 @@ const deleteMessage = async (req, res) => {
       ...payload,
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[Error] falha generalizada:', error);
+    return res.status(500).json({ message: 'Falha interna no servidor.' });
   }
 };
 
@@ -447,7 +452,8 @@ const deleteManyMessages = async (req, res) => {
       ...payload,
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[Error] falha generalizada:', error);
+    return res.status(500).json({ message: 'Falha interna no servidor.' });
   }
 };
 

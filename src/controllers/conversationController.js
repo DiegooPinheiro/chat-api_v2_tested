@@ -1,4 +1,4 @@
-﻿const Conversation = require('../models/Conversation');
+const Conversation = require('../models/Conversation');
 const User = require('../models/User');
 const Message = require('../models/Message');
 const { auditLog } = require('../utils/logger');
@@ -44,7 +44,8 @@ const createConversation = async (req, res) => {
     await clearCache("cache:/api/conversations/*");
     return res.status(201).json(savedConversation);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[Error] falha generalizada:', error);
+    return res.status(500).json({ message: 'Falha interna no servidor.' });
   }
 };
 
@@ -85,7 +86,8 @@ const createGroup = async (req, res) => {
     for (const pId of allParticipants) { await clearCache("cache:/api/conversations/13700*"); }
     return res.status(201).json(savedGroup);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[Error] falha generalizada:', error);
+    return res.status(500).json({ message: 'Falha interna no servidor.' });
   }
 };
 
@@ -171,7 +173,8 @@ const getUserConversations = async (req, res) => {
 
     return res.status(200).json(enrichedConversations);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[Error] falha generalizada:', error);
+    return res.status(500).json({ message: 'Falha interna no servidor.' });
   }
 };
 
@@ -201,7 +204,8 @@ const deleteConversation = async (req, res) => {
       deletedMessages: messagesResult?.deletedCount ?? 0,
     });
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[Error] falha generalizada:', error);
+    return res.status(500).json({ message: 'Falha interna no servidor.' });
   }
 };
 
@@ -225,7 +229,8 @@ const getConversationById = async (req, res) => {
 
     return res.status(200).json(conversation);
   } catch (error) {
-    return res.status(500).json({ message: error.message });
+    console.error('[Error] falha generalizada:', error);
+    return res.status(500).json({ message: 'Falha interna no servidor.' });
   }
 };
 

@@ -1,5 +1,7 @@
 const express = require('express');
 const cors = require('cors');
+const helmet = require('helmet');
+const rateLimit = require('express-rate-limit');
 require('./config/firebaseAdmin');
 const authRoutes = require('./routes/authRoutes');
 const userRoutes = require('./routes/userRoutes');
@@ -13,6 +15,18 @@ const app = express();
 app.use(cors({
   origin: process.env.CORS_ORIGIN ? process.env.CORS_ORIGIN.split(',').map((item) => item.trim()) : '*',
 }));
+
+// Ativa proteção robusta de Header HTTP escondendo a assinatura do Express Node.
+app.use(helmet());
+
+// Limita pedidos a 100 requisições por janela de 15 minutos por IP
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000, 
+  limit: 100, 
+  message: { message: 'Muitas requisições originadas deste IP, por favor tente novamente mais tarde.' }
+});
+app.use('/api', limiter);
+
 app.use(express.json());
 app.use(express.urlencoded({ extended: true }));
 
