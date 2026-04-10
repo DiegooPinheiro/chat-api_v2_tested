@@ -94,8 +94,11 @@ Crie as chaves na pasta raiz do server.
 
 ```env
 PORT=3000
+NODE_ENV=development
+CORS_ORIGIN=http://localhost:8880,http://localhost:8081
+
 # Database Connectors Core
-MONGO_URI=mongodb+srv://... (Crie na Cloud Atlas)
+MONGODB_URI=mongodb+srv://... (Crie na Cloud Atlas)
 REDIS_URL=redis://default:... (Instancia do Cloud Redis)
 
 # Firebase Keys (O JSON do Service Account dissecado:)
@@ -106,6 +109,7 @@ FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nTeu_Chavao...\n-----END PRIVA
 # API Extras Control
 ENCRYPTION_KEY=Sua_Chave32BytesParaMensagensSeguras123
 RESEND_API_KEY=re_Qxxxxx...
+DEBUG_SOCKET=1
 SOCKET_POPULATE=1
 ```
 
