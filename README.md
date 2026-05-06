@@ -242,6 +242,126 @@ ENCRYPTION_KEY=sua_chave_gerada
 2. `NODE_ENV`: use `development` localmente e `production` em deploy.
 3. `CORS_ORIGIN`: coloque as URLs do frontend que podem acessar a API, separadas por virgula.
 
+### Deploy da API no Render
+Use este passo a passo quando fizer mudancas no backend e precisar atualizar a API online usada pelo app.
+
+Documentacao oficial util:
+
+1. [Deploy de app Node/Express no Render](https://render.com/docs/deploy-node-express-app)
+2. [Web Services no Render](https://render.com/docs/web-services)
+3. [Variaveis de ambiente no Render](https://render.com/docs/environment-variables)
+
+#### 1. Suba o backend para o GitHub
+O Render faz deploy a partir de um repositorio Git.
+
+```bash
+git status
+git add .
+git commit -m "Atualiza backend"
+git push
+```
+
+Nao envie o arquivo `.env` para o GitHub. As chaves devem ser cadastradas direto no painel do Render.
+
+#### 2. Crie o Web Service
+1. Acesse [Render Dashboard](https://dashboard.render.com/).
+2. Clique em **New +**.
+3. Escolha **Web Service**.
+4. Conecte sua conta GitHub, GitLab ou Bitbucket.
+5. Selecione o repositorio da API `chat-api_v2_tested`.
+6. Configure:
+
+```text
+Name: chat-api-v2-tested
+Runtime: Node
+Branch: main
+Root Directory: deixe vazio se este repositorio for apenas a API
+Build Command: npm install
+Start Command: npm start
+```
+
+O `npm start` deste projeto executa:
+
+```bash
+node src/index.js
+```
+
+#### 3. Configure as variaveis de ambiente no Render
+No Web Service, abra **Environment** e cadastre:
+
+```env
+NODE_ENV=production
+MONGODB_URI=mongodb+srv://usuario:senha@cluster.mongodb.net/chat-api
+REDIS_URL=redis://usuario:senha@host:porta
+FIREBASE_PROJECT_ID=seu_project_id
+FIREBASE_CLIENT_EMAIL=firebase-adminsdk-xxxxx@seu-projeto.iam.gserviceaccount.com
+FIREBASE_PRIVATE_KEY="-----BEGIN PRIVATE KEY-----\nSUA_CHAVE_PRIVADA_AQUI\n-----END PRIVATE KEY-----\n"
+ENCRYPTION_KEY=sua_chave_gerada
+RESEND_API_KEY=re_sua_chave
+CORS_ORIGIN=*
+```
+
+Observacoes importantes:
+
+1. Nao precisa cadastrar `PORT`; o Render injeta a porta automaticamente e o projeto ja usa `process.env.PORT`.
+2. Em producao real, troque `CORS_ORIGIN=*` pela URL do app/site que pode chamar a API.
+3. Mantenha o `FIREBASE_PRIVATE_KEY` com os `\n` da chave original.
+4. Use a mesma `ENCRYPTION_KEY` sempre. Se trocar, mensagens antigas criptografadas podem deixar de abrir.
+
+#### 4. Faca o primeiro deploy
+1. Clique em **Create Web Service**.
+2. Aguarde o build terminar.
+3. Abra a aba **Logs**.
+4. Confirme que aparece algo como:
+
+```text
+Servidor rodando na porta ...
+MongoDB conectado
+```
+
+Quando o deploy terminar, o Render vai gerar uma URL parecida com:
+
+```text
+https://chat-api-v2-tested.onrender.com
+```
+
+Teste no navegador ou terminal:
+
+```bash
+curl https://chat-api-v2-tested.onrender.com
+```
+
+#### 5. Atualize o app Expo para usar a API publicada
+No projeto `Vibe-mensage`, abra o `.env` e coloque a URL do Render:
+
+```env
+EXPO_PUBLIC_CHAT_API_URL=https://chat-api-v2-tested.onrender.com
+```
+
+Depois reinicie o Expo limpando cache:
+
+```bash
+npx expo start -c
+```
+
+#### 6. Como atualizar depois de uma mudanca
+Sempre que corrigir o backend:
+
+```bash
+git add .
+git commit -m "Corrige backend"
+git push
+```
+
+Se o Render estiver com auto deploy ativo, ele publica sozinho. Se nao estiver, abra o Web Service no Render e clique em **Manual Deploy > Deploy latest commit**.
+
+#### 7. Checklist para problemas comuns
+1. **Deploy falha no build:** confira se `Build Command` esta `npm install`.
+2. **API sobe mas nao conecta no Mongo:** confira `MONGODB_URI` e libere IP no MongoDB Atlas. Para Render, use `0.0.0.0/0` em teste.
+3. **Firebase retorna 401:** confira `FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL` e `FIREBASE_PRIVATE_KEY`.
+4. **Socket nao atualiza em tempo real:** confira se o app usa exatamente a URL do Render em `EXPO_PUBLIC_CHAT_API_URL` e reinicie o Expo.
+5. **Visto/cache nao atualiza:** depois do deploy, envie uma nova mensagem e abra a conversa no outro dispositivo. Mensagens antigas podem precisar recarregar a lista.
+
 ### Instalação e Servidor de Dev:
 O projeto usa `pnpm`, mas tolera `npm`.
 
