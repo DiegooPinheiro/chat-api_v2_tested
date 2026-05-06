@@ -113,6 +113,135 @@ DEBUG_SOCKET=1
 SOCKET_POPULATE=1
 ```
 
+### Como conseguir todas as chaves do backend
+Use o `.env.example` como base e preencha o `.env` da raiz do backend. Nunca envie o `.env`, JSONs de service account, senhas ou tokens para o GitHub; o `.gitignore` deste projeto ja ignora o `.env`.
+
+Antes de começar, crie uma conta ou faca login nos serviços abaixo:
+
+1. [Firebase Console](https://console.firebase.google.com/) para autenticação e Firebase Admin.
+2. [MongoDB Atlas](https://cloud.mongodb.com/) para o banco principal.
+3. [Redis Cloud](https://app.redislabs.com/) para cache.
+4. [Resend](https://resend.com/) para envio de e-mail/2FA.
+
+#### MongoDB Atlas (`MONGODB_URI`)
+1. Acesse [MongoDB Atlas](https://cloud.mongodb.com/).
+2. Crie uma conta ou faca login.
+3. Crie uma **Organization** e um **Project**, se ainda nao existirem.
+4. Entre no projeto e clique em **Build a Database**.
+5. Escolha um cluster gratuito/de teste, quando disponivel, e aguarde a criacao.
+6. Em **Database Access**, clique em **Add New Database User**.
+7. Crie um usuario com senha forte e permissao de leitura/escrita no banco.
+8. Em **Network Access**, clique em **Add IP Address**.
+9. Para desenvolvimento, libere seu IP atual. Use `0.0.0.0/0` apenas em teste, pois libera qualquer origem.
+10. Volte em **Database**, clique em **Connect** no cluster.
+11. Escolha **Drivers** e selecione **Node.js**.
+12. Copie a connection string.
+13. Troque `<password>` pela senha criada e defina o banco no final da URL:
+
+```env
+MONGODB_URI=mongodb+srv://usuario:senha@cluster.mongodb.net/chat-api
+```
+
+Teste rapido opcional:
+
+```bash
+node -e "require('mongoose').connect(process.env.MONGODB_URI).then(()=>console.log('Mongo OK')).catch(console.error)"
+```
+
+#### Redis Cloud (`REDIS_URL`)
+1. Acesse [Redis Cloud](https://app.redislabs.com/).
+2. Crie uma conta ou faca login.
+3. Crie uma subscription gratuita/de teste, quando disponivel.
+4. Crie um banco Redis.
+5. Abra os detalhes do banco.
+6. Copie o host, porta, usuario e senha.
+7. Monte a URL no formato:
+
+```env
+REDIS_URL=redis://usuario:senha@host:porta
+```
+
+Quando o painel mostrar um comando assim:
+
+```bash
+redis-cli -u redis://default:senha@host:porta
+```
+
+Copie apenas a parte depois de `-u` para o `.env`.
+
+#### Firebase Admin SDK (`FIREBASE_PROJECT_ID`, `FIREBASE_CLIENT_EMAIL`, `FIREBASE_PRIVATE_KEY`)
+1. Acesse o [Firebase Console](https://console.firebase.google.com/).
+2. Crie uma conta Google ou faca login.
+3. Crie um projeto ou abra o projeto usado pelo app.
+4. Entre em **Configuracoes do projeto**.
+5. Abra a aba **Contas de servico**.
+6. Em **Firebase Admin SDK**, clique em **Gerar nova chave privada**.
+7. Confirme o download do arquivo `.json`.
+8. Abra o JSON em um editor local.
+9. Copie estes campos do JSON para o `.env`:
+
+```env
+FIREBASE_PROJECT_ID=valor_do_project_id
+FIREBASE_CLIENT_EMAIL=valor_do_client_email
+FIREBASE_PRIVATE_KEY="valor_do_private_key_com_\n"
+```
+
+O campo `private_key` deve ficar entre aspas e manter os `\n`, como no JSON original. Se essa chave vazar, gere uma nova chave no Firebase Console e apague a antiga.
+
+#### Contas de teste no Firebase Auth
+Use contas de teste para validar login, conversas e permissao de usuario.
+
+1. No Firebase Console, abra o projeto.
+2. Vá em **Authentication**.
+3. Clique em **Get started**, se for a primeira vez.
+4. Abra **Sign-in method**.
+5. Ative **Email/Password**.
+6. Abra a aba **Users**.
+7. Clique em **Add user**.
+8. Crie pelo menos duas contas para testar conversa entre usuarios:
+
+```text
+teste1@example.com / senha123456
+teste2@example.com / senha123456
+```
+
+Use e-mails ficticios apenas em ambiente local. Para testar envio real de e-mail/2FA, use e-mails que voce controla.
+
+#### Resend (`RESEND_API_KEY`)
+1. Acesse [Resend](https://resend.com/).
+2. Crie uma conta ou faca login.
+3. Entre no seu workspace.
+4. Abra **API Keys**.
+5. Clique em **Create API Key**.
+6. Dê um nome como `vibe-dev`.
+7. Copie a chave gerada e coloque no `.env`:
+
+```env
+RESEND_API_KEY=re_sua_chave
+```
+
+Para envio real em producao, configure tambem um dominio em **Domains** e siga a validacao DNS da Resend. Em desenvolvimento, use um e-mail seu para testar recebimento dos codigos 2FA.
+
+#### Chave de criptografia (`ENCRYPTION_KEY`)
+Essa chave protege as mensagens salvas no banco. Use uma string secreta forte com 32 caracteres ou mais.
+
+Exemplo para gerar no Node:
+
+```bash
+node -e "console.log(require('crypto').randomBytes(32).toString('hex'))"
+```
+
+Depois coloque no `.env`:
+
+```env
+ENCRYPTION_KEY=sua_chave_gerada
+```
+
+#### Variaveis locais (`PORT`, `NODE_ENV`, `CORS_ORIGIN`)
+1. `PORT`: porta onde a API vai rodar, normalmente `3000`.
+2. `NODE_ENV`: use `development` localmente e `production` em deploy.
+3. `CORS_ORIGIN`: coloque as URLs do frontend que podem acessar a API, separadas por virgula.
+
 ### Instalação e Servidor de Dev:
 O projeto usa `pnpm`, mas tolera `npm`.
 
