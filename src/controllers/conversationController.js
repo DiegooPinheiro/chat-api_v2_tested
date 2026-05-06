@@ -102,7 +102,7 @@ const getUserConversations = async (req, res) => {
     const conversations = await Conversation.find({
       participants: { $in: [req.params.userId] },
     })
-      .populate('participants', 'nome username foto')
+      .populate('participants', 'firebaseUid nome username foto')
       .sort({ updatedAt: -1 });
 
     const unreadCounts = await Message.aggregate([
@@ -217,7 +217,7 @@ const getConversationById = async (req, res) => {
 
   try {
     const conversation = await Conversation.findById(conversationId)
-      .populate('participants', 'nome username foto');
+      .populate('participants', 'firebaseUid nome username foto');
 
     if (!conversation) {
       return res.status(404).json({ message: 'Conversa nao encontrada' });

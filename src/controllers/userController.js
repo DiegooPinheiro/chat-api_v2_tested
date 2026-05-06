@@ -29,7 +29,7 @@ const listUsers = async (req, res) => {
     }
 
     const users = await User.find(filter)
-      .select('_id username nome foto')
+      .select('_id firebaseUid username nome foto')
       .sort({ nome: 1 })
       .limit(limit);
 
@@ -68,6 +68,7 @@ const getUserProfile = async (req, res) => {
   if (user) {
     return res.json({
       _id: user._id,
+      firebaseUid: user.firebaseUid,
       username: user.username,
       nome: user.nome,
       foto: user.foto,
@@ -126,7 +127,7 @@ const syncContacts = async (req, res) => {
     const users = await User.find({
       _id: { $ne: req.user._id },
       phone: { $in: normalizedPhones, $ne: '' }
-    }).select('_id username nome foto phone');
+    }).select('_id firebaseUid username nome foto phone');
 
     return res.status(200).json(users);
   } catch (error) {
