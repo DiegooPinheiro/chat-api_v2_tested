@@ -137,10 +137,12 @@ const getUserConversations = async (req, res) => {
       {
         $group: {
           _id: '$conversationId',
+          messageId: { $first: '$_id' },
           text: { $first: '$text' },
           mediaUrl: { $first: '$mediaUrl' },
           senderId: { $first: '$senderId' },
           createdAt: { $first: '$createdAt' },
+          read: { $first: '$read' },
         },
       },
     ]);
@@ -149,9 +151,11 @@ const getUserConversations = async (req, res) => {
       lastVisibleMessages.map((item) => [
         String(item._id),
         {
+          _id: item.messageId,
           text: item.text ? String(item.text) : item.mediaUrl ? 'Midia' : '',
           senderId: item.senderId,
           createdAt: item.createdAt,
+          read: !!item.read,
         },
       ])
     );

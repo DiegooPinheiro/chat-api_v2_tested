@@ -28,13 +28,15 @@ const ensureConversationAccess = async (conversationId, userId) => {
 const syncConversationLastMessage = async (conversationId) => {
   const latestMessage = await Message.findOne({ conversationId })
     .sort({ createdAt: -1 })
-    .select('text mediaUrl senderId createdAt');
+    .select('text mediaUrl senderId createdAt read');
 
   const nextLastMessage = latestMessage
     ? {
+        _id: latestMessage._id,
         text: latestMessage.text ? String(latestMessage.text) : latestMessage.mediaUrl ? 'Midia' : '',
         senderId: latestMessage.senderId,
         createdAt: latestMessage.createdAt,
+        read: !!latestMessage.read,
       }
     : null;
 
@@ -58,6 +60,18 @@ const markConversationAsRead = async (conversationId, readerId) => {
   }).select('_id senderId');
 
   if (!unreadMessages.length) {
+    const latestMessage = await Message.findOne(buildVisibleMessageQuery(conversationId, readerId))
+      .sort({ createdAt: -1 })
+      .select('_id senderId read');
+
+    if (latestMessage && String(latestMessage.senderId) !== String(readerId) && latestMessage.read) {
+      await Conversation.updateOne(
+        { _id: conversationId, 'lastMessage._id': latestMessage._id },
+        { $set: { 'lastMessage.read': true } }
+      );
+      await clearCache("cache:/api/conversations/*");
+    }
+
     return { modifiedCount: 0, messageIds: [] };
   }
 
@@ -66,14 +80,28 @@ const markConversationAsRead = async (conversationId, readerId) => {
     { _id: { $in: messageIds } },
     { $set: { read: true } }
   );
+  await Conversation.updateOne(
+    { _id: conversationId, 'lastMessage._id': { $in: messageIds } },
+    { $set: { 'lastMessage.read': true } }
+  );
 
+  const conversation = await Conversation.findById(conversationId).select('lastMessage');
   const senderIds = Array.from(new Set(unreadMessages.map((message) => String(message.senderId))));
   const payload = {
     conversationId: String(conversationId),
     readerId: String(readerId),
     messageIds: messageIds.map((id) => String(id)),
     read: true,
+    lastMessage: conversation?.lastMessage
+      ? {
+          ...conversation.lastMessage.toObject(),
+          read: true,
+        }
+      : null,
   };
+
+  await clearCache("cache:/api/conversations/*");
+  await clearCache("cache:/api/messages/*");
 
   senderIds.forEach((senderId) => {
     emitToUserRoom(senderId, 'messages_read', payload);
@@ -117,9 +145,11 @@ const sendMessage = async (req, res) => {
 
     await Conversation.findByIdAndUpdate(conversationId, {
       lastMessage: {
+        _id: savedMessage._id,
         text: lastText,
         senderId,
         createdAt: savedMessage.createdAt,
+        read: false,
       },
     });
 
@@ -221,8 +251,6 @@ const markMessagesAsRead = async (req, res) => {
 
     const result = await markConversationAsRead(conversationId, userId);
     await clearCache("cache:/api/messages/*");
-    await clearCache("cache:/api/messages/*");
-    await clearCache("cache:/api/messages/*");
     return res.status(200).json({
       message: 'Mensagens marcadas como lidas',
       ...result,
@@ -277,9 +305,11 @@ const updateMessage = async (req, res) => {
     let lastMessage = conversationLastMessage || null;
     if (isConversationLastMessage) {
       lastMessage = {
+        _id: message._id,
         text: nextText,
         senderId: message.senderId,
         createdAt: message.createdAt,
+        read: !!message.read,
       };
 
       await Conversation.findByIdAndUpdate(message.conversationId, {

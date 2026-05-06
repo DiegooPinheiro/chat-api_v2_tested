@@ -22,12 +22,20 @@ const conversationSchema = new mongoose.Schema({
     type: String
   },
   lastMessage: {
+    _id: {
+      type: mongoose.Schema.Types.ObjectId,
+      ref: 'Message'
+    },
     text: String,
     senderId: {
       type: mongoose.Schema.Types.ObjectId,
       ref: 'User'
     },
-    createdAt: Date
+    createdAt: Date,
+    read: {
+      type: Boolean,
+      default: false
+    }
   }
 }, {
   timestamps: true

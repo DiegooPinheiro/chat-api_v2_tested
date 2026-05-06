@@ -164,9 +164,11 @@ const setupChatSocket = (io) => {
 
         await Conversation.findByIdAndUpdate(conversationId, {
           lastMessage: {
+            _id: savedMessage._id,
             text: lastText,
             senderId,
             createdAt: savedMessage.createdAt,
+            read: false,
           },
         });
 
